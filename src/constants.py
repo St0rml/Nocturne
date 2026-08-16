@@ -723,3 +723,8 @@ CONTEXT_GENRE = {
         "action-name": "app.play_genre_shuffle"
     }
 }
+
+COVER_SIZE = {
+    "big": 720,
+    "small": 240
+}
