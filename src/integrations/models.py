@@ -20,6 +20,8 @@ class Album(GObject.Object):
     userRating = GObject.Property(type=int)
     year = GObject.Property(type=int)
 
+    verified = GObject.Property(type=bool, default=False)
+
     def __init__(self, **kwargs):
         super().__init__()
         self.update_data(**kwargs)
@@ -52,6 +54,8 @@ class Artist(GObject.Object):
     similarArtist = GObject.Property(type=GObject.TYPE_PYOBJECT) #list
     userRating = GObject.Property(type=int)
 
+    verified = GObject.Property(type=bool, default=False)
+
     def __init__(self, **kwargs):
         super().__init__()
         self.update_data(**kwargs)
@@ -80,6 +84,8 @@ class Playlist(GObject.Object):
     readonly = GObject.Property(type=bool, default=False)
     entry = GObject.Property(type=GObject.TYPE_PYOBJECT) #list
 
+    verified = GObject.Property(type=bool, default=False)
+
     def __init__(self, **kwargs):
         super().__init__()
         self.update_data(**kwargs)
@@ -100,7 +106,6 @@ class Song(GObject.Object):
 
     id = GObject.Property(type=str)
     coverArt = GObject.Property(type=str)
-    albumArtCheck = GObject.Property(type=bool, default=False)
     gdkPaintable = GObject.Property(type=Gdk.Paintable)
     gdkPaintableBig = GObject.Property(type=Gdk.Paintable)
     title = GObject.Property(type=str)
@@ -121,6 +126,8 @@ class Song(GObject.Object):
     radioStreamUrl = GObject.Property(type=str)
     container = GObject.Property(type=str)
     codec = GObject.Property(type=str)
+
+    verified = GObject.Property(type=bool, default=False)
 
     path = GObject.Property(type=str) # For use in Local
 
@@ -168,6 +175,8 @@ class SongDetails(GObject.Object):
     artists = GObject.Property(type=GObject.TYPE_PYOBJECT, nick=_("Artists")) # list
     trackGain = GObject.Property(type=float, nick=_("Track Gain"))
     albumGain = GObject.Property(type=float, nick=_("Album Gain"))
+
+    verified = GObject.Property(type=bool, default=False)
 
     def __init__(self, **kwargs):
         super().__init__()

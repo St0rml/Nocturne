@@ -444,7 +444,7 @@ class Jellyfin(Base):
                 if not gdkPaintableBig_bytes:
                     if model.get_property('coverArt'):
                         gdkPaintableBig_bytes = self.getCoverArtBytes(model_id, size["big"])
-                    elif isinstance(model, models.Song) and not model.get_property("albumArtCheck"):
+                    elif isinstance(model, models.Song) and not model.get_property("verified"):
                         gdkPaintableBig_bytes = self.getCoverArtBytes(model.get_property('albumId'), size["big"])
                 if gdkPaintableBig_bytes:
                     if not gdkPaintable_bytes:
@@ -621,6 +621,8 @@ class Jellyfin(Base):
 
     def verifyArtist(self, model_id:str, force_update:bool=False, use_threading:bool=True, minimal:bool=False):
         def fetch_artist():
+            nonlocal verified_check
+
             artist = self.make_request(
                 action='Users/{userId}/Items/{id}',
                 action_keys={"id": model_id},
@@ -651,7 +653,8 @@ class Jellyfin(Base):
                 mode="GET",
                 params=params
             )
-            if albums := albums_request.get("Items", []):
+            if albums_request:
+                albums = albums_request.get("Items", [])
                 albums_dict = [{"id": alb.get("Id"), "name": alb.get("Name")} for alb in albums]
                 self.__write_to_model(model_id, {
                     "albumCount": albums_request.get("TotalRecordCount", 0),
@@ -660,8 +663,12 @@ class Jellyfin(Base):
                 if not minimal:
                     self.__bulk_compile(MediaType.ALBUM, albums)
                     fetch_guest_albums(artist_albums=albums_dict)
+            else:
+                verified_check = False
 
         def fetch_guest_albums(artist_albums:list=[]):
+            nonlocal verified_check
+
             model_albums = artist_albums
             if not artist_albums: #fetch albums from model
                 model_albums = self.loaded_models.get(model_id).get_property("album")
@@ -678,45 +685,55 @@ class Jellyfin(Base):
                 }
             )
 
-            if albums := albums_request.get("Items", []):
+            if albums_request:
+                albums = albums_request.get("Items", [])
                 guest_albums = [album for album in albums if album.get("Id") not in excluded_albums]
                 self.__write_to_model(model_id, {
                     "guestAlbum": [{"id": alb.get("Id"), "name": alb.get("Name")} for alb in guest_albums],
                     "guestAlbumCount": albums_request.get("TotalRecordCount", 0)
                 }, wait=not use_threading)
                 self.__bulk_compile(MediaType.ALBUM, guest_albums)
+            else:
+                verified_check = False
 
         def fetch_similar():
+            nonlocal verified_check
+
             similar_request = self.make_request(
                 action='/Items/{id}/Similar?userId={userId}',
                 action_keys={"id": model_id},
                 params={"limit": 12},
                 mode="GET"
             )
-            if similar := similar_request.get("Items", []):
-                self.__bulk_compile(MediaType.ARTIST, similar)
+            if similar_request:
+                similar = similar_request.get("Items", [])
                 self.__write_to_model(model_id, {
                     "similarArtist":[{"id": sim.get("Id"), "name": sim.get("Name")} for sim in similar]
-                },
-                wait = not use_threading)
+                }, wait = not use_threading)
+                self.__bulk_compile(MediaType.ARTIST, similar)
+            else:
+                verified_check = False
 
         def fetch_all():
             model = self.loaded_models[model_id]
             if not model.get_property("name"):
                 fetch_artist()
-            futures = []
-            album_count = model.get_property("albumCount")
-            guest_count = model.get_property("guestAlbumCount")
-            if album_count == -1 or (album_count > 0 and not model.get_property("album")):
-                futures.append(self.threads.submit(fetch_albums))
-            elif guest_count == -1 or (guest_count > 0 and not model.get_property("guestAlbum")):
-                #if album request was successful but guest_albums request failed
-                futures.append(self.threads.submit(fetch_guest_albums))
-            if (not model.get_property("gdkPaintable") or not model.get_property("gdkPaintableBig")) and model.get_property("coverArt"):
-                futures.append(self.threads.submit(self.updateCoverArt(model_id)))
-            if not model.get_property("similarArtist") and not minimal:
-                futures.append(self.threads.submit(fetch_similar))
-            wait(futures)
+            if model_id in self.loaded_models and not model.get_property("verified"):
+                futures = []
+                album_count = model.get_property("albumCount")
+                guest_count = model.get_property("guestAlbumCount")
+                if album_count == -1 or (album_count > 0 and not model.get_property("album")):
+                    futures.append(self.threads.submit(fetch_albums))
+                elif guest_count == -1 or (guest_count > 0 and not model.get_property("guestAlbum")):
+                    #if album request was successful but guest_albums request failed
+                    futures.append(self.threads.submit(fetch_guest_albums))
+                if (not model.get_property("gdkPaintable") or not model.get_property("gdkPaintableBig")) and model.get_property("coverArt"):
+                    futures.append(self.threads.submit(self.updateCoverArt(model_id)))
+                if not model.get_property("similarArtist") and not minimal:
+                    futures.append(self.threads.submit(fetch_similar))
+                wait(futures)
+                if verified_check:
+                    self.__write_to_model(model_id, {"verified":True}, wait=use_threading)
             if model_id in self.ongoing_requests and self.ongoing_requests[model_id] == minimal:
                 del self.ongoing_requests[model_id]
 
@@ -733,6 +750,7 @@ class Jellyfin(Base):
         if model_id not in self.loaded_models:
             self.loaded_models[model_id] = models.Artist(id=model_id)
 
+        verified_check = not minimal
         if use_threading:
             threading.Thread(target=fetch_all, daemon=True).start()
         else:
@@ -753,6 +771,8 @@ class Jellyfin(Base):
                 del self.loaded_models[model_id]
 
         def fetch_songs():
+            nonlocal verified_check
+
             songs_request = self.make_request(
                 action='Users/{userId}/Items',
                 mode="GET",
@@ -766,27 +786,31 @@ class Jellyfin(Base):
                 }
             )
 
-            if total := songs_request.get("TotalRecordCount", 0):
+            if songs_request:
                 songs = songs_request.get("Items", [])
                 duration = int(sum(song.get("RunTimeTicks", 0) for song in songs) / 10000000)
-                if total > 0: self.__bulk_compile(MediaType.SONG, songs)
                 self.__write_to_model(model_id, {
-                    "songCount": total,
+                    "songCount": songs_request.get("TotalRecordCount", 0),
                     "duration": duration,
                     "song": [{"id": song.get("Id"), "name": song.get("Name")} for song in songs]
-                },
-                wait=not use_threading) #ensure songs are there for app actions
+                }, wait=not use_threading) #ensure songs are there for app actions
+                self.__bulk_compile(MediaType.SONG, songs)
+            else:
+                verified_check = False
 
         def fetch_all():
             model = self.loaded_models[model_id]
             if not model.get_property("name"):
                 fetch_album()
-            futures = []
-            if not model.get_property("song") and not minimal:
-                futures.append(self.threads.submit(fetch_songs))
-            if (not model.get_property("gdkPaintable") or not model.get_property("gdkPaintableBig")) and model.get_property("coverArt"):
-                futures.append(self.threads.submit(self.updateCoverArt(model_id)))
-            wait(futures)
+            if model_id in self.loaded_models and not model.get_property("verified"):
+                futures = []
+                if not model.get_property("song") and not minimal:
+                    futures.append(self.threads.submit(fetch_songs))
+                if (not model.get_property("gdkPaintable") or not model.get_property("gdkPaintableBig")) and model.get_property("coverArt"):
+                    futures.append(self.threads.submit(self.updateCoverArt(model_id)))
+                wait(futures)
+                if verified_check:
+                    self.__write_to_model(model_id, {"verified":True}, wait=use_threading)
             if model_id in self.ongoing_requests and self.ongoing_requests[model_id] == minimal:
                 del self.ongoing_requests[model_id]
 
@@ -803,6 +827,7 @@ class Jellyfin(Base):
         if model_id not in self.loaded_models:
             self.loaded_models[model_id] = models.Album(id=model_id)
 
+        verified_check = not minimal
         if use_threading:
             threading.Thread(target=fetch_all, daemon=True).start()
         else:
@@ -821,7 +846,9 @@ class Jellyfin(Base):
             elif model_id in self.loaded_models:
                 del self.loaded_models[model_id]
 
-        def get_songs():
+        def fetch_songs():
+            nonlocal verified_check
+
             params = {
                 "UserId": self.get_property("userId"),
                 "Fields": "RunTimeTicks"
@@ -834,33 +861,39 @@ class Jellyfin(Base):
             else:
                 params["Fields"] += ",MediaSources"
 
-            songs_response = self.make_request(
+            songs_request = self.make_request(
                 action='Playlists/{id}/Items',
                 action_keys={"id": model_id},
                 mode="GET",
                 params=params
             )
-            if total := songs_response.get("TotalRecordCount"):
-                songs = songs_response.get("Items", [])
+
+            if songs_request:
+                songs = songs_request.get("Items", [])
                 duration = int(sum(song.get("RunTimeTicks", 0) for song in songs) / 10000000)
-                self.__bulk_compile(MediaType.SONG, songs)
                 self.__write_to_model(model_id, {
-                    "songCount": total,
+                    "songCount": songs_request.get("TotalRecordCount"),
                     "duration": duration,
                     "entry": [{"id": song.get("Id"), "name": song.get("Name")} for song in songs]
                 },
                 wait=not use_threading) #ensure songs are there for app actions
+                self.__bulk_compile(MediaType.SONG, songs)
+            else:
+                verified_check = False
 
         def fetch_all():
             model = self.loaded_models[model_id]
             if not model.get_property("name"):
                 fetch_playlist()
-            futures = []
-            if not model.get_property("entry"):
-                futures.append(self.threads.submit(get_songs))
-            if (not model.get_property("gdkPaintable") or not model.get_property("gdkPaintableBig")) and model.get_property("coverArt"):
-                futures.append(self.threads.submit(self.updateCoverArt(model_id)))
-            wait(futures)
+            if model_id in self.loaded_models and not model.get_property("verified"):
+                futures = []
+                if not model.get_property("entry"):
+                    futures.append(self.threads.submit(fetch_songs))
+                if (not model.get_property("gdkPaintable") or not model.get_property("gdkPaintableBig")) and model.get_property("coverArt"):
+                    futures.append(self.threads.submit(self.updateCoverArt(model_id)))
+                wait(futures)
+                if verified_check:
+                    self.__write_to_model(model_id, {"verified":True}, wait=use_threading)
             if model_id in self.ongoing_requests and self.ongoing_requests[model_id] == minimal:
                 del self.ongoing_requests[model_id]
 
@@ -876,6 +909,7 @@ class Jellyfin(Base):
         if model_id not in self.loaded_models:
             self.loaded_models[model_id] = models.Playlist(id=model_id)
 
+        verified_check = not minimal
         if use_threading:
             threading.Thread(target=fetch_all, daemon=True).start()
         else:
@@ -917,7 +951,7 @@ class Jellyfin(Base):
                         )
                         if primary_tag := album.get('ImageTags', {}).get('Primary', ''):
                             cover_art = f"Items/{model.get_property('albumId')}/Images/Primary?={primary_tag}"
-                self.__write_to_model(model_id, {"coverArt" : cover_art, "albumArtCheck": True}, wait=True)
+                self.__write_to_model(model_id, {"coverArt" : cover_art, "verified": True}, wait=True)
             if cover_art:
                 self.updateCoverArt(model_id)
 
@@ -925,8 +959,9 @@ class Jellyfin(Base):
             model = self.loaded_models[model_id]
             if not model.get_property("title"):
                 fetch_song()
-            if (not model.get_property("gdkPaintable") or not model.get_property("gdkPaintableBig")) and (model.get_property("coverArt") or not model.get_property("albumArtCheck")):
-                fetch_cover()
+            if model_id in self.loaded_models:
+                if (not model.get_property("gdkPaintable") or not model.get_property("gdkPaintableBig")) and (model.get_property("coverArt") or not model.get_property("verified")):
+                    fetch_cover()
             if model_id in self.ongoing_requests and self.ongoing_requests[model_id] == minimal:
                 del self.ongoing_requests[model_id]
 
