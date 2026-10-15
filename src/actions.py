@@ -9,9 +9,8 @@ from .constants import DATA_DIR, BASE_NAVIDROME_DIR, DOWNLOADS_DIR
 
 # -- HELPER --
 
-def __show_page(window, page:Adw.NavigationPage):
-    application = window.get_application()
-    active_window = application.props.active_window
+def __show_page(app, page:Adw.NavigationPage):
+    active_window = app.props.active_window
     if active_window.__gtype_name__ == 'NocturnePopoutWindow':
         page_dialog = None
         for dialog in active_window.get_dialogs():
@@ -26,7 +25,7 @@ def __show_page(window, page:Adw.NavigationPage):
         for dialog in active_window.get_dialogs():
             GLib.idle_add(dialog.close)
 
-def __show_custom_toast(window, model_id:str, title_property:str, subtitle:str, icon_name:str=None):
+def __show_custom_toast(app, model_id:str, title_property:str, subtitle:str, icon_name:str=None):
     # Thread safe
     integration = get_current_integration()
     model = integration.loaded_models.get(model_id)
@@ -56,9 +55,9 @@ def __show_custom_toast(window, model_id:str, title_property:str, subtitle:str, 
         custom_title=custom_widget,
         timeout=2
     )
-    GLib.idle_add(window.get_application().props.active_window.toast_overlay.add_toast, toast)
+    GLib.idle_add(app.props.active_window.toast_overlay.add_toast, toast)
 
-def __save_playlist_resume(window):
+def __save_playlist_resume(app):
     # Check if current queue origin is a playlist if so, save the resume state
     # Call in different thread
     integration = get_current_integration()
@@ -73,9 +72,9 @@ def __save_playlist_resume(window):
                 current_timestamp=timestamp
             )
 
-def __replace_queue(window, songs:list, current_id:str=None, origin_id:str=""):
+def __replace_queue(app, songs:list, current_id:str=None, origin_id:str=""):
     integration = get_current_integration()
-    __save_playlist_resume(window)
+    __save_playlist_resume(app)
     integration.get_property('current-state').set_property('queueOrigin', origin_id)
     queue_model = integration.get_property('current-state').get_property('queueModel')
     GLib.idle_add(queue_model.remove_all)
@@ -89,16 +88,16 @@ def __replace_queue(window, songs:list, current_id:str=None, origin_id:str=""):
         )
     GLib.idle_add(integration.get_property('current-state').set_property, 'songId', current_id)
     if Gio.Settings(schema_id="com.jeffser.Nocturne").get_value('auto-play').unpack():
-        threading.Thread(target=generate_auto_play_queue, args=(window, False), daemon=True).start()
+        threading.Thread(target=generate_auto_play_queue, args=(app, False), daemon=True).start()
 
-def __play_next(window, songs:list):
+def __play_next(app, songs:list):
     integration = get_current_integration()
-    __save_playlist_resume(window)
+    __save_playlist_resume(app)
     integration.get_property('current-state').set_property('queueOrigin', "")
     current_song_id = integration.get_property('current-state').get_property('songId')
     queue_model = integration.get_property('current-state').get_property('queueModel')
     if queue_model.get_property('n-items') == 0 or not current_song_id:
-        __replace_queue(window, songs)
+        __replace_queue(app, songs)
     else:
         current_song_index = 0
         for i, so in enumerate(list(queue_model)): # so=string object
@@ -113,14 +112,14 @@ def __play_next(window, songs:list):
             [Gtk.StringObject.new(SongId) for SongId in songs if SongId != current_song_id]
         )
 
-def __play_later(window, songs:list):
+def __play_later(app, songs:list):
     integration = get_current_integration()
-    __save_playlist_resume(window)
+    __save_playlist_resume(app)
     integration.get_property('current-state').set_property('queueOrigin', "")
     current_song_id = integration.get_property('current-state').get_property('songId')
     queue_model = integration.get_property('current-state').get_property('queueModel')
     if queue_model.get_property('n-items') == 0 or not current_song_id:
-        __replace_queue(window, songs)
+        __replace_queue(app, songs)
     else:
         for i, so in enumerate(list(queue_model)): # so=string object
             song_id = so.get_string()
@@ -134,9 +133,8 @@ def __play_later(window, songs:list):
 
 # -- MISC --
 
-def reload(window):
-    application = window.get_application()
-    active_window = application.props.active_window
+def reload(app):
+    active_window = app.props.active_window
     if active_window.__gtype_name__ == 'NocturnePopoutWindow':
         for dialog in active_window.get_dialogs():
             if dialog.__gtype_name__ == 'NocturnePageDialog':
@@ -144,36 +142,34 @@ def reload(window):
     else:
         active_window.main_navigationview.get_visible_page().reload()
 
-def show_error(window, message:str):
-    if app := window.get_application():
-        dialog = Adw.AlertDialog(
-            heading=_("Error"),
-            body=message or _("No details provided")
-        )
-        dialog.add_response('close', _('Close'))
-        GLib.idle_add(dialog.choose, app.props.active_window, None, None)
+def show_error(app, message:str):
+    dialog = Adw.AlertDialog(
+        heading=_("Error"),
+        body=message or _("No details provided")
+    )
+    dialog.add_response('close', _('Close'))
+    GLib.idle_add(dialog.choose, app.props.active_window, None, None)
 
-def search(window):
+def search(app):
     homepage = None
-    if app := window.get_application():
-        active_window = app.props.active_window
-        if active_window == app.main_window:
-            active_window.replace_root_page('home')
-            homepage = active_window.main_navigationview.find_page('home')
-        else:
+    active_window = app.props.active_window
+    if active_window == app.main_window:
+        active_window.replace_root_page('home')
+        homepage = active_window.main_navigationview.find_page('home')
+    else:
+        for dialog in active_window.get_dialogs():
+            if dialog.__gtype_name__ == 'NocturnePageDialog':
+                homepage = dialog.navigation_view.find_page('home')
+        if not homepage:
+            __show_page(active_window, Widgets.HomePage())
             for dialog in active_window.get_dialogs():
                 if dialog.__gtype_name__ == 'NocturnePageDialog':
                     homepage = dialog.navigation_view.find_page('home')
-            if not homepage:
-                __show_page(active_window, Widgets.HomePage())
-                for dialog in active_window.get_dialogs():
-                    if dialog.__gtype_name__ == 'NocturnePageDialog':
-                        homepage = dialog.navigation_view.find_page('home')
     if homepage:
         GLib.idle_add(homepage.search_bar.set_search_mode, not homepage.search_bar.get_search_mode())
 
-def launch_playback(window):
-    GLib.idle_add(window.main_stack.set_visible_child_name, 'loading')
+def launch_playback(app):
+    GLib.idle_add(app.main_window.main_stack.set_visible_child_name, 'loading')
     integration = get_current_integration()
     prev_month = datetime.now().replace(day=1) - timedelta(days=1)
     top_songs = []
@@ -183,18 +179,18 @@ def launch_playback(window):
             top_songs.append((songId, plays))
 
     if len(top_songs) > 5:
-        GLib.idle_add(window.main_stack.set_visible_child_name, 'playback')
-        GLib.idle_add(window.main_stack.get_child_by_name('playback').setup, top_songs, prev_month)
-        __replace_queue(window, [s[0] for s in top_songs])
+        GLib.idle_add(app.main_window.main_stack.set_visible_child_name, 'playback')
+        GLib.idle_add(app.main_window.main_stack.get_child_by_name('playback').setup, top_songs, prev_month)
+        __replace_queue(app, [s[0] for s in top_songs])
     else:
         toast = Adw.Toast(
             title=_("Not enough data found for Nocturne Playback ({})").format(prev_month.strftime("%B %Y")),
             timeout=2
         )
-        GLib.idle_add(window.toast_overlay.add_toast, toast)
-        GLib.idle_add(window.main_stack.set_visible_child_name, 'content')
+        GLib.idle_add(app.main_window.toast_overlay.add_toast, toast)
+        GLib.idle_add(app.main_window.main_stack.set_visible_child_name, 'content')
 
-def generate_auto_play_queue(window, replace_on_finish:bool):
+def generate_auto_play_queue(app, replace_on_finish:bool):
     integration = get_current_integration()
     integration.get_property('current-state').set_property('generatingQueue', True)
     queue_model = integration.get_property('current-state').get_property('queueModel')
@@ -226,9 +222,9 @@ def generate_auto_play_queue(window, replace_on_finish:bool):
     integration.get_property('current-state').set_property('generatingQueue', False)
 
     if replace_on_finish:
-        __replace_queue(window, [so.get_string() for so in list(generated_queue_model)])
+        __replace_queue(app, [so.get_string() for so in list(generated_queue_model)])
 
-def set_equalizer_preset(window, preset_name:str):
+def set_equalizer_preset(app, preset_name:str):
     preset = {
         "flat": [0.0] * 6,
         "clarity": [-2.0, -4.0, 2.0, 5.0, 3.0, 1.0],
@@ -242,15 +238,15 @@ def set_equalizer_preset(window, preset_name:str):
     for i, value in enumerate(preset):
         settings.set_double("eq-band-{}".format(i), value)
 
-def replace_root_page(window, page_tag:str):
+def replace_root_page(app, page_tag:str):
     try:
-        index = [i for i, item in enumerate(list(window.main_sidebar.get_items())) if item.get_visible() and item.page_tag == page_tag][0]
-        GLib.idle_add(window.main_sidebar.set_selected, index)
+        index = [i for i, item in enumerate(list(app.main_window.main_sidebar.get_items())) if item.get_visible() and item.page_tag == page_tag][0]
+        GLib.idle_add(app.main_window.main_sidebar.set_selected, index)
     except Exception as e:
         pass
-    GLib.idle_add(window.replace_root_page, page_tag)
+    GLib.idle_add(app.main_window.replace_root_page, page_tag)
 
-def visit_url(window, url:str):
+def visit_url(app, url:str):
     if url.startswith('file://'):
         url = Gio.File.new_for_path(url.removeprefix('file://')).get_uri()
         os.system('xdg-open {}'.format(url))
@@ -258,7 +254,7 @@ def visit_url(window, url:str):
 
     Gio.AppInfo.launch_default_for_uri(url, None)
 
-def toggle_star(window, model_id:str):
+def toggle_star(app, model_id:str):
     integration = get_current_integration()
     if model_id in integration.loaded_models:
         model = integration.loaded_models.get(model_id)
@@ -269,55 +265,55 @@ def toggle_star(window, model_id:str):
             if integration.star(model.get_property('id')):
                 model.set_property('starred', True)
 
-def lazy_reload_window(window):
+def lazy_reload_window(app):
     def iterate_lazy_load():
-        for page in list(window.main_navigationview):
+        for page in list(app.main_window.main_navigationview):
             if isinstance(page, Adw.NavigationPage):
                 if hasattr(page, "lazy_reload"):
                     page.lazy_reload = True
-    threading.Thread(target=__replace_queue, args=(window,[]), daemon=True).start()
+    threading.Thread(target=__replace_queue, args=(app,[]), daemon=True).start()
     page_tag = Gio.Settings(schema_id="com.jeffser.Nocturne").get_string('default-page-tag')
-    GLib.idle_add(replace_root_page, window, page_tag)
+    GLib.idle_add(replace_root_page, app, page_tag)
     GLib.idle_add(iterate_lazy_load)
-    reload(window)
+    reload(app)
 
-def logout(window):
+def logout(app):
     integration = get_current_integration()
     threading.Thread(target=integration.terminate_instance, daemon=True).start()
     settings = Gio.Settings(schema_id="com.jeffser.Nocturne")
     settings.set_string('integration-user', '')
     settings.set_string('selected-instance-type', '')
     settings.set_strv('library-ids', [])
-    threading.Thread(target=__replace_queue, args=(window,[]), daemon=True).start()
-    GLib.idle_add(window.main_stack.set_visible_child_name, 'welcome')
-    GLib.idle_add(replace_root_page, window, 'home')
+    threading.Thread(target=__replace_queue, args=(app,[]), daemon=True).start()
+    GLib.idle_add(app.main_window.main_stack.set_visible_child_name, 'welcome')
+    GLib.idle_add(replace_root_page, app, 'home')
     if settings.get_value('welcome-mode-home').unpack() == 'instance':
         pfp_destination_path = os.path.join(DATA_DIR, 'pfp')
         if os.path.isfile(pfp_destination_path):
             os.remove(pfp_destination_path)
         settings.set_string("welcome-user-home", "")
         settings.set_string("welcome-mode-home", "")
-    window.get_application().player.event_adapter.mpris.unpublish()
-    for dialog in window.get_dialogs():
+    app.player.event_adapter.mpris.unpublish()
+    for dialog in app.main_window.get_dialogs():
         GLib.idle_add(dialog.close)
-    for page in list(window.main_navigationview):
+    for page in list(app.main_window.main_navigationview):
         if isinstance(page, Adw.NavigationPage):
             GLib.idle_add(page.reset)
 
-def show_external_file_warning(window):
+def show_external_file_warning(app):
     dialog = Adw.AlertDialog(
         heading=_("External File"),
         body=_("This track was loaded from an external file, this means it will have less features compared to a track inside the library")
     )
     dialog.add_response('close', _('Close'))
-    GLib.idle_add(dialog.choose, window, None, lambda *_: None, None)
+    GLib.idle_add(dialog.choose, app.props.active_window, None, lambda *_: None, None)
 
-def update_navidrome_server(window):
-    GLib.idle_add(window.main_stack.set_visible_child_name, 'setup')
-    if dialog := window.get_visible_dialog():
+def update_navidrome_server(app):
+    GLib.idle_add(app.main_window.main_stack.set_visible_child_name, 'setup')
+    if dialog := app.main_window.get_visible_dialog():
         GLib.idle_add(dialog.close)
 
-def delete_navidrome_server(window):
+def delete_navidrome_server(app):
     def response(dialog, task):
         selected_option = dialog.choose_finish(task)
         if selected_option == "delete":
@@ -330,10 +326,10 @@ def delete_navidrome_server(window):
             title=_("Navidrome server deleted successfully"),
             timeout=2
         )
-        window.toast_overlay.add_toast(toast)
-        window.main_stack.set_visible_child_name('welcome')
+        app.main_window.toast_overlay.add_toast(toast)
+        app.main_window.main_stack.set_visible_child_name('welcome')
 
-    if dialog := window.get_visible_dialog():
+    if dialog := app.main_window.get_visible_dialog():
         dialog.close()
     dialog = Adw.AlertDialog(
         heading=_("Delete Navidrome Server"),
@@ -343,29 +339,29 @@ def delete_navidrome_server(window):
     dialog.add_response("keep_data", _("Keep Data"))
     dialog.add_response("delete", _("Delete Everything"))
     dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
-    GLib.idle_add(dialog.choose, window, None, response)
+    GLib.idle_add(dialog.choose, app.main_window, None, response)
 
-def open_popout_window(window, fullscreened:bool=False):
-    if not window.get_application().popout_window:
-        window.get_application().popout_window = Widgets.PopoutWindow(
-            application=window.get_application(),
+def open_popout_window(app, fullscreened:bool=False):
+    if not app.popout_window:
+        app.popout_window = Widgets.PopoutWindow(
+            application=app,
             fullscreened=fullscreened
         )
-    GLib.idle_add(window.get_application().popout_window.present)
+    GLib.idle_add(app.popout_window.present)
 
-def toggle_fullscreen(window):
+def toggle_fullscreen(app):
     integration = get_current_integration()
     if integration.get_property('current-state').get_property('queueModel').get_property('n-items') > 0:
-        if popout_window := window.get_application().popout_window:
+        if popout_window := app.popout_window:
             GLib.idle_add(popout_window.present)
             if popout_window.is_fullscreen():
                 GLib.idle_add(popout_window.unfullscreen)
             else:
                 GLib.idle_add(popout_window.fullscreen)
         else:
-            open_popout_window(window, True)
+            open_popout_window(app, True)
 
-def set_rating(window, data):
+def set_rating(app, data):
     integration = get_current_integration()
     if model := integration.loaded_models.get(data.get('model_id')):
         if new_rating := data.get('rating'):
@@ -376,36 +372,35 @@ def set_rating(window, data):
 
 # -- PLAYER --
 
-def player_toggle(window):
-    player = window.get_application().player
-    success, state, pending = player.gst.get_state(Gst.CLOCK_TIME_NONE)
+def player_toggle(app):
+    success, state, pending = app.player.gst.get_state(Gst.CLOCK_TIME_NONE)
     if success:
         if state == Gst.State.PLAYING:
             # Pause the song
-            player.gst.set_state(Gst.State.PAUSED)
+            app.player.gst.set_state(Gst.State.PAUSED)
         else:
             # Play the song
-            player.gst.set_state(Gst.State.PLAYING)
+            app.player.gst.set_state(Gst.State.PLAYING)
 
-def player_play(window):
-    window.get_application().player.gst.set_state(Gst.State.PLAYING)
+def player_play(app):
+    app.player.gst.set_state(Gst.State.PLAYING)
 
-def player_pause(window):
-    window.get_application().player.gst.set_state(Gst.State.PAUSED)
+def player_pause(app):
+    app.player.gst.set_state(Gst.State.PAUSED)
 
-def player_next(window):
-    window.get_application().player.handle_song_change_request("next")
+def player_next(app):
+    app.player.handle_song_change_request("next")
 
-def player_previous(window):
-    window.get_application().player.handle_song_change_request("previous")
+def player_previous(app):
+    app.player.handle_song_change_request("previous")
 
-def player_raise_volume(window):
+def player_raise_volume(app):
     settings = Gio.Settings(schema_id="com.jeffser.Nocturne")
     volume = settings.get_value('volume').unpack()
     volume = max(0, min(1, volume + 0.1))
     settings.set_double('volume', volume)
 
-def player_lower_volume(window):
+def player_lower_volume(app):
     settings = Gio.Settings(schema_id="com.jeffser.Nocturne")
     volume = settings.get_value('volume').unpack()
     volume = max(0, min(1, volume - 0.1))
@@ -413,14 +408,14 @@ def player_lower_volume(window):
 
 # -- RADIO --
 
-def play_radio(window, model_id:str):
+def play_radio(app, model_id:str):
     integration = get_current_integration()
     if model_id in [so.get_string() for so in integration.get_property('current-state').get_property('queueModel')]:
         integration.get_property('current-state').set_property('songId', model_id)
     else:
-        __replace_queue(window, [model_id])
+        __replace_queue(app, [model_id])
 
-def update_radio(window, model_id:str=""):
+def update_radio(app, model_id:str=""):
     integration = get_current_integration()
     model = integration.loaded_models.get(model_id) if model_id else None
 
@@ -450,14 +445,14 @@ def update_radio(window, model_id:str=""):
                         model.set_property('title', name)
                         model.set_property('radioStreamUrl', stream)
                     else:
-                        threading.Thread(target=window.main_navigationview.get_visible_page().reload, daemon=True).start()
+                        threading.Thread(target=app.main_window.main_navigationview.get_visible_page().reload, daemon=True).start()
             if not message:
                 message = _("Error updating radio") if model_id else _("Error adding radio")
             toast = Adw.Toast(
                 title=message,
                 timeout=2
             )
-            GLib.idle_add(window.toast_overlay.add_toast, toast)
+            GLib.idle_add(app.main_window.toast_overlay.add_toast, toast)
 
     list_box = Gtk.ListBox(
         selection_mode=Gtk.SelectionMode.NONE,
@@ -481,12 +476,12 @@ def update_radio(window, model_id:str=""):
     dialog.add_response("cancel", _("Cancel"))
     dialog.add_response("save", _("Save"))
     dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
-    dialog.choose(window, None, lambda *prms: threading.Thread(target=response, args=prms, daemon=True).start(), name_el, stream_el)
+    dialog.choose(app.main_window, None, lambda *prms: threading.Thread(target=response, args=prms, daemon=True).start(), name_el, stream_el)
 
-def add_radio(window):
-    update_radio(window)
+def add_radio(app):
+    update_radio(app)
 
-def delete_radio(window, model_id:str):
+def delete_radio(app, model_id:str):
     integration = get_current_integration()
     model = integration.loaded_models.get(model_id)
 
@@ -494,14 +489,14 @@ def delete_radio(window, model_id:str):
         if integration.deleteInternetRadioStation(model_id):
             message = _("Radio deleted successfully")
             del integration.loaded_models[model_id]
-            threading.Thread(target=window.main_navigationview.get_visible_page().reload, daemon=True).start()
+            threading.Thread(target=app.main_window.main_navigationview.get_visible_page().reload, daemon=True).start()
         else:
             message = _("Error deleting radio")
         toast = Adw.Toast(
             title=message,
             timeout=2
         )
-        GLib.idle_add(window.toast_overlay.add_toast, toast)
+        GLib.idle_add(app.main_window.toast_overlay.add_toast, toast)
 
 
     def response(dialog, task):
@@ -515,155 +510,155 @@ def delete_radio(window, model_id:str):
     dialog.add_response("cancel", _("Cancel"))
     dialog.add_response("delete", _("Delete"))
     dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
-    GLib.idle_add(dialog.choose, window, None, response)
+    GLib.idle_add(dialog.choose, app.main_window, None, response)
 
 # -- SONG --
 
-def play_song(window, model_id:str):
+def play_song(app, model_id:str):
     integration = get_current_integration()
     if model_id in [so.get_string() for so in integration.get_property('current-state').get_property('queueModel')]:
         integration.get_property('current-state').set_property('songId', model_id)
     else:
-        __replace_queue(window, [model_id])
+        __replace_queue(app, [model_id])
 
-def play_song_from_list(window, data:dict):
+def play_song_from_list(app, data:dict):
     if song_id := data.get('songId'):
-        __replace_queue(window, data.get('songs', [song_id]), song_id, origin_id=data.get('originId', ""))
+        __replace_queue(app, data.get('songs', [song_id]), song_id, origin_id=data.get('originId', ""))
 
-def play_song_next(window, model_id:str):
-    __play_next(window, [model_id])
-    __show_custom_toast(window, model_id, 'title', _("Playing Next"))
+def play_song_next(app, model_id:str):
+    __play_next(app, [model_id])
+    __show_custom_toast(app, model_id, 'title', _("Playing Next"))
 
-def play_song_later(window, model_id:str):
-    __play_later(window, [model_id])
-    __show_custom_toast(window, model_id, 'title', _("Playing Later"))
+def play_song_later(app, model_id:str):
+    __play_later(app, [model_id])
+    __show_custom_toast(app, model_id, 'title', _("Playing Later"))
 
-def play_songs(window, song_list:list):
-    __replace_queue(window, song_list)
+def play_songs(app, song_list:list):
+    __replace_queue(app, song_list)
 
-def play_songs_next(window, song_list:list):
-    __play_next(window, song_list)
+def play_songs_next(app, song_list:list):
+    __play_next(app, song_list)
     if len(song_list)> 1:
-        __show_custom_toast(window, None, _("{} Songs").format(len(song_list)), _("Playing Next"), "list-high-priority-symbolic")
+        __show_custom_toast(app, None, _("{} Songs").format(len(song_list)), _("Playing Next"), "list-high-priority-symbolic")
     else:
-        __show_custom_toast(window, song_list[0], "title", _("Playing Next"))
+        __show_custom_toast(app, song_list[0], "title", _("Playing Next"))
 
-def play_songs_later(window, song_list:list):
-    __play_later(window, song_list)
+def play_songs_later(app, song_list:list):
+    __play_later(app, song_list)
     if len(song_list) > 1:
-        __show_custom_toast(window, None, _("{} Songs").format(len(song_list)), _("Playing Later"), "list-low-priority-symbolic")
+        __show_custom_toast(app, None, _("{} Songs").format(len(song_list)), _("Playing Later"), "list-low-priority-symbolic")
     else:
-        __show_custom_toast(window, song_list[0], "title", _("Playing Later"))
+        __show_custom_toast(app, song_list[0], "title", _("Playing Later"))
 
-def edit_lyrics(window):
-    GLib.idle_add(Widgets.LyricsDialog().present, window.get_application().props.active_window)
+def edit_lyrics(app):
+    GLib.idle_add(Widgets.LyricsDialog().present, app.props.active_window)
 
-def play_random_queue(window):
+def play_random_queue(app):
     integration = get_current_integration()
-    __replace_queue(window, integration.getRandomSongs())
+    __replace_queue(app, integration.getRandomSongs())
 
-def show_song_details(window, model_id):
+def show_song_details(app, model_id):
     dialog = Widgets.SongDetailsDialog(model_id)
-    GLib.idle_add(dialog.present, window.get_application().props.active_window)
+    GLib.idle_add(dialog.present, app.props.active_window)
 
 # -- ALBUM --
 
-def show_album(window, model_id:str):
-    __show_page(window, Widgets.AlbumPage(model_id))
+def show_album(app, model_id:str):
+    __show_page(app, Widgets.AlbumPage(model_id))
 
-def show_album_from_song(window, model_id:str):
+def show_album_from_song(app, model_id:str):
     integration = get_current_integration()
     if model := integration.loaded_models.get(model_id):
         if album_id := model.get_property('albumId'):
-            __show_page(window, Widgets.AlbumPage(album_id))
+            __show_page(app, Widgets.AlbumPage(album_id))
 
-def play_album(window, model_id:str):
+def play_album(app, model_id:str):
     integration = get_current_integration()
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if album := integration.loaded_models.get(model_id):
-        __replace_queue(window, [s.get('id') for s in album.get_property('song')], origin_id=model_id)
+        __replace_queue(app, [s.get('id') for s in album.get_property('song')], origin_id=model_id)
 
-def play_album_next(window, model_id:str):
+def play_album_next(app, model_id:str):
     integration = get_current_integration()
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if album := integration.loaded_models.get(model_id):
-        __play_next(window, [s.get('id') for s in album.get_property('song')])
-        __show_custom_toast(window, model_id, 'name', _('Playing Next'))
+        __play_next(app, [s.get('id') for s in album.get_property('song')])
+        __show_custom_toast(app, model_id, 'name', _('Playing Next'))
 
-def play_album_later(window, model_id:str):
+def play_album_later(app, model_id:str):
     integration = get_current_integration()
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if album := integration.loaded_models.get(model_id):
-        __play_later(window, [s.get('id') for s in album.get_property('song')])
-        __show_custom_toast(window, model_id, 'name', _('Playing Later'))
+        __play_later(app, [s.get('id') for s in album.get_property('song')])
+        __show_custom_toast(app, model_id, 'name', _('Playing Later'))
 
-def play_album_shuffle(window, model_id:str):
+def play_album_shuffle(app, model_id:str):
     integration = get_current_integration()
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if album := integration.loaded_models.get(model_id):
         song_list = [s.get('id') for s in album.get_property('song')]
         random.shuffle(song_list)
-        __replace_queue(window, song_list, origin_id=model_id)
+        __replace_queue(app, song_list, origin_id=model_id)
 
 # -- PLAYLIST --
 
-def show_playlist(window, model_id:str):
-    __show_page(window, Widgets.PlaylistPage(model_id))
+def show_playlist(app, model_id:str):
+    __show_page(app, Widgets.PlaylistPage(model_id))
 
-def play_playlist(window, model_id:str):
+def play_playlist(app, model_id:str):
     integration = get_current_integration()
     if playlist := integration.loaded_models.get(model_id):
         integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
-        __replace_queue(window, [s.get('id') for s in playlist.get_property('entry')], origin_id=model_id)
+        __replace_queue(app, [s.get('id') for s in playlist.get_property('entry')], origin_id=model_id)
 
-def resume_playlist(window, model_id:str):
+def resume_playlist(app, model_id:str):
     integration = get_current_integration()
     integration.verifyPlaylist(model_id, force_update=True, use_threading=False)
     current_id, timestamp = integration.getPlaylistResume(model_id)
     integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
     __replace_queue(
-        window,
+        app,
         [s.get('id') for s in playlist.get_property('entry')],
         origin_id=model_id,
         current_id=current_id
     )
     nanoseconds = int(timestamp * Gst.SECOND)
-    GLib.timeout_add(100, lambda: window.get_application().player.gst.seek_simple(
+    GLib.timeout_add(100, lambda: app.player.gst.seek_simple(
         Gst.Format.TIME,
         Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT,
         nanoseconds
     ) and False)
 
-def play_playlist_next(window, model_id:str):
+def play_playlist_next(app, model_id:str):
     integration = get_current_integration()
     if playlist := integration.loaded_models.get(model_id):
         integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
-        __play_next(window, [s.get('id') for s in playlist.get_property('entry')])
-        __show_custom_toast(window, model_id, 'name', _("Playing Next"))
+        __play_next(app, [s.get('id') for s in playlist.get_property('entry')])
+        __show_custom_toast(app, model_id, 'name', _("Playing Next"))
 
-def play_playlist_later(window, model_id:str):
+def play_playlist_later(app, model_id:str):
     integration = get_current_integration()
     if playlist := integration.loaded_models.get(model_id):
         integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
-        __play_later(window, [s.get('id') for s in playlist.get_property('entry')])
-        __show_custom_toast(window, model_id, 'name', _("Playing Later"))
+        __play_later(app, [s.get('id') for s in playlist.get_property('entry')])
+        __show_custom_toast(app, model_id, 'name', _("Playing Later"))
 
-def play_playlist_shuffle(window, model_id:str):
+def play_playlist_shuffle(app, model_id:str):
     integration = get_current_integration()
     if playlist := integration.loaded_models.get(model_id):
         integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
         song_list = [s.get('id') for s in playlist.get_property('entry')]
         random.shuffle(song_list)
-        __replace_queue(window, song_list, origin_id=model_id)
+        __replace_queue(app, song_list, origin_id=model_id)
 
-def update_playlist(window, model_id:str=None):
+def update_playlist(app, model_id:str=None):
     integration = get_current_integration()
 
     def do_update(name:str):
         if result := integration.createPlaylist(name, playlistId=model_id):
             integration.verifyPlaylist(result, force_update=True, use_threading=False)
-            window.setup_sidebar()
-            window.main_navigationview.get_visible_page().reload()
+            app.main_window.setup_sidebar()
+            app.main_window.main_navigationview.get_visible_page().reload()
             message = _("Playlist updated successfully") if model_id else _("Playlist created successfully")
         else:
             message = _("Error updating playlist") if model_id else _("Error creating playlist"),
@@ -671,7 +666,7 @@ def update_playlist(window, model_id:str=None):
             title=message,
             timeout=2
         )
-        GLib.idle_add(window.toast_overlay.add_toast, toast)
+        GLib.idle_add(app.props.active_window.toast_overlay.add_toast, toast)
 
     def response(dialog, task, name_el):
         if dialog.choose_finish(task) == 'create':
@@ -693,45 +688,45 @@ def update_playlist(window, model_id:str=None):
     dialog.add_response("cancel", _("Cancel"))
     dialog.add_response("create", _("Update") if model_id else _("Create"))
     dialog.set_response_appearance("create", Adw.ResponseAppearance.SUGGESTED)
-    GLib.idle_add(dialog.choose, window, None, response, name_el)
+    GLib.idle_add(dialog.choose, app.props.active_window, None, response, name_el)
 
-def create_playlist(window):
-    update_playlist(window)
+def create_playlist(app):
+    update_playlist(app)
 
-def remove_songs_from_playlist(window, data:dict):
+def remove_songs_from_playlist(app, data:dict):
     playlist_id = data.get('playlist', "")
     song_list = data.get('indexes', [])
     if playlist_id and song_list:
         integration = get_current_integration()
         if result := integration.updatePlaylist(playlist_id, songIndexToRemove=song_list):
-            __show_custom_toast(window, playlist_id, "name", ngettext("{} Song Removed", "{} Songs Removed", len(song_list)).format(len(song_list)))
+            __show_custom_toast(app, playlist_id, "name", ngettext("{} Song Removed", "{} Songs Removed", len(song_list)).format(len(song_list)))
 
-def prompt_add_songs_to_playlist(window, song_list:list):
+def prompt_add_songs_to_playlist(app, song_list:list):
     dialog = Widgets.playlist.PlaylistDialog(song_list)
-    GLib.idle_add(dialog.present, window.get_application().props.active_window)
+    GLib.idle_add(dialog.present, app.props.active_window)
 
-def prompt_add_song_to_playlist(window, model_id:str):
+def prompt_add_song_to_playlist(app, model_id:str):
     dialog = Widgets.playlist.PlaylistDialog([model_id])
-    GLib.idle_add(dialog.present, window.get_application().props.active_window)
+    GLib.idle_add(dialog.present, app.props.active_window)
 
-def prompt_add_album_to_playlist(window, model_id:str):
+def prompt_add_album_to_playlist(wiappndow, model_id:str):
     integration = get_current_integration()
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if model := integration.loaded_models.get(model_id):
         dialog = Widgets.playlist.PlaylistDialog([s.get('id') for s in model.get_property('song')])
-        GLib.idle_add(dialog.present, window.get_application().props.active_window)
+        GLib.idle_add(dialog.present, app.props.active_window)
 
-def add_songs_to_playlist(window, data):
+def add_songs_to_playlist(app, data):
     integration = get_current_integration()
-    for dialog in window.get_dialogs():
+    for dialog in app.props.active_window.get_dialogs():
         GLib.idle_add(dialog.close)
 
     if data.get('new_playlist'):
         if response := integration.createPlaylist(name=data.get('new_playlist'), songId=data.get('songs')):
             integration.verifyPlaylist(response, force_update=True, use_threading=False)
             message = ngettext("{} Song Added", "{} Songs Added", len(data.get("songs"))).format(len(data.get("songs")))
-            __show_custom_toast(window, response, "name", message)
-            window.setup_sidebar()
+            __show_custom_toast(app, response, "name", message)
+            app.main_window.setup_sidebar()
     elif data.get('playlist'):
         integration.verifyPlaylist(data.get('playlist'), force_update=True, use_threading=False)
         if model := integration.loaded_models.get(data.get('playlist')):
@@ -749,20 +744,20 @@ def add_songs_to_playlist(window, data):
             if skipped_songs > 0:
                 message.append(ngettext("{} Song Skipped", "{} Songs Skipped", skipped_songs).format(skipped_songs))
 
-            __show_custom_toast(window, data.get('playlist'), 'name', ' | '.join(message))
+            __show_custom_toast(app, data.get('playlist'), 'name', ' | '.join(message))
 
-def delete_playlist(window, model_id:str):
+def delete_playlist(app, model_id:str):
     integration = get_current_integration()
     model = integration.loaded_models.get(model_id)
 
     def response(dialog, task, model):
         if dialog.choose_finish(task) == "delete":
             if result := integration.deletePlaylist(model.get_property('id')):
-                __show_custom_toast(window, model.get_property('id'), "name", _("Playlist Deleted"))
+                __show_custom_toast(app, model.get_property('id'), "name", _("Playlist Deleted"))
                 show_toast(model)
                 del integration.loaded_models[model.id]
-                window.main_navigationview.get_visible_page().reload()
-                window.setup_sidebar()
+                app.main_window.main_navigationview.get_visible_page().reload()
+                app.main_window.setup_sidebar()
 
     dialog = Adw.AlertDialog(
         heading=_("Delete Playlist"),
@@ -771,30 +766,30 @@ def delete_playlist(window, model_id:str):
     dialog.add_response("cancel", _("Cancel"))
     dialog.add_response("delete", _("Delete"))
     dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
-    GLib.idle_add(dialog.choose, window, None, response, model)
+    GLib.idle_add(dialog.choose, app.props.active_window, None, response, model)
 
 # -- ARTIST --
 
-def show_artist(window, model_id:str):
-    __show_page(window, Widgets.ArtistPage(model_id))
+def show_artist(app, model_id:str):
+    __show_page(app, Widgets.ArtistPage(model_id))
 
-def show_artist_from_song(window, model_id:str):
+def show_artist_from_song(app, model_id:str):
     integration = get_current_integration()
     if model := integration.loaded_models.get(model_id):
         if artist_id := model.get_property('artistId'):
-            __show_page(window, Widgets.ArtistPage(artist_id))
+            __show_page(app, Widgets.ArtistPage(artist_id))
 
-def show_artist_from_album(window, model_id:str):
+def show_artist_from_album(app, model_id:str):
     integration = get_current_integration()
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if model := integration.loaded_models.get(model_id):
         if artist_id := model.get_property('artistId'):
-            GLib.idle_add(__show_page, window, Widgets.ArtistPage(artist_id))
+            __show_page(app, Widgets.ArtistPage(artist_id))
         elif artists := model.get_property('artists'):
             if artist_id := artists[0].get('id'):
-                GLib.idle_add(__show_page, window, Widgets.ArtistPage(artist_id))
+                __show_page(app, Widgets.ArtistPage(artist_id))
 
-def play_shuffle_artist(window, model_id:str):
+def play_shuffle_artist(app, model_id:str):
     integration = get_current_integration()
     integration.verifyArtist(model_id, force_update=True, use_threading=False)
     model = integration.loaded_models.get(model_id)
@@ -806,18 +801,18 @@ def play_shuffle_artist(window, model_id:str):
             if album_model:
                 songs.extend([s.get('id') for s in album_model.get_property('song')])
         if len(songs) > 0:
-            play_songs(window, random.sample(songs, min(20, len(songs))))
+            play_songs(app, random.sample(songs, min(20, len(songs))))
 
-def play_radio_artist(window, model_id:str):
+def play_radio_artist(app, model_id:str):
     integration = get_current_integration()
     songs = integration.getSimilarSongs(model_id)
     if len(songs) > 0:
-        play_songs(window, songs)
+        play_songs(app, songs)
     else:
         toast = Adw.Toast(
             title=_("No songs found")
         )
-        GLib.idle_add(window.toast_overlay.add_toast, toast)
+        GLib.idle_add(app.props.active_window.toast_overlay.add_toast, toast)
 
 
 # -- GENRES --
@@ -855,26 +850,26 @@ def __request_song_download(model_id:str) -> bool:
         return True
     return False
 
-def download_song(window, model_id:str):
+def download_song(app, model_id:str):
     is_downloading = __request_song_download(model_id)
     if is_downloading:
         __show_custom_toast(
-            window,
+            app,
             model_id,
             'title',
             _("Download Started")
         )
     else:
         __show_custom_toast(
-            window,
+            app,
             model_id,
             'title',
             _("Already Downloaded")
         )
 
-def download_songs(window, model_list:str):
+def download_songs(app, model_list:str):
     if len(model_list) == 1:
-        download_song(window, model_list[0])
+        download_song(app, model_list[0])
         return
     integration = get_current_integration()
     successful_starts = 0
@@ -883,7 +878,7 @@ def download_songs(window, model_list:str):
 
     if len(model_list) == successful_starts:
         __show_custom_toast(
-            window,
+            app,
             None,
             _("{} Songs").format(len(model_list)),
             _("Download Started")
@@ -894,20 +889,20 @@ def download_songs(window, model_list:str):
         message = ngettext("{} Song ({})", "{} Songs ({})", successful_starts).format(successful_starts, skip_message)
 
         __show_custom_toast(
-            window,
+            app,
             None,
             message,
             _("Already Downloaded")
         )
     else:
         __show_custom_toast(
-            window,
+            app,
             None,
             _("Download Skipped"),
             _("Already Downloaded")
         )
 
-def download_album(window, model_id:str):
+def download_album(app, model_id:str):
     integration = get_current_integration()
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if model := integration.loaded_models.get(model_id):
@@ -918,7 +913,7 @@ def download_album(window, model_id:str):
 
         if len(song_ids) == successful_starts:
             __show_custom_toast(
-                window,
+                app,
                 model_id,
                 'name',
                 _("Download Started")
@@ -927,20 +922,20 @@ def download_album(window, model_id:str):
             skipped_songs = len(song_ids) - successful_starts
             message = ngettext("Download Started ({} Song Skipped)", "Download Started ({} Songs Skipped)", skipped_songs).format(skipped_songs)
             __show_custom_toast(
-                window,
+                app,
                 model_id,
                 'name',
                 message
             )
         else:
             __show_custom_toast(
-                window,
+                app,
                 model_id,
                 'name',
                 _("Already Downloaded")
             )
 
-def download_playlist(window, model_id:str):
+def download_playlist(app, model_id:str):
     integration = get_current_integration()
     integration.verifyPlaylist(model_id, force_update=True, use_threading=False)
     if model := integration.loaded_models.get(model_id):
@@ -951,7 +946,7 @@ def download_playlist(window, model_id:str):
 
         if len(song_ids) == successful_starts:
             __show_custom_toast(
-                window,
+                app,
                 model_id,
                 'name',
                 _("Download Started")
@@ -960,14 +955,14 @@ def download_playlist(window, model_id:str):
             skipped_songs = len(song_ids) - successful_starts
             message = ngettext("Download Started ({} Song Skipped)", "Download Started ({} Songs Skipped)", skipped_songs).format(skipped_songs)
             __show_custom_toast(
-                window,
+                app,
                 model_id,
                 'name',
                 message
             )
         else:
             __show_custom_toast(
-                window,
+                app,
                 model_id,
                 'name',
                 _("Already Downloaded")
@@ -986,19 +981,19 @@ def __request_download_delete(model_id:str) -> bool:
             return False
     return False
 
-def delete_download(window, model_id:str):
+def delete_download(app, model_id:str):
     integration = get_current_integration()
     deleted = __request_download_delete(model_id)
     if deleted:
         __show_custom_toast(
-            window,
+            app,
             model_id,
             'title',
             _("Deleted")
         )
         del integration.loaded_models[model_id]
 
-def delete_downloads(window, model_list:list):
+def delete_downloads(app, model_list:list):
     integration = get_current_integration()
     successful_deletes = 0
     for songId in model_list:
@@ -1008,7 +1003,7 @@ def delete_downloads(window, model_list:list):
             del integration.loaded_models[songId]
 
     __show_custom_toast(
-        window,
+        app,
         None,
         _("{} Songs").format(successful_deletes),
         _("Deleted")
