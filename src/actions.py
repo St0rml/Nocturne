@@ -1,6 +1,6 @@
 # actions.py
 
-from .integrations import get_current_integration, models
+from .integrations import models
 import random, threading, os, shutil, pathlib
 from datetime import datetime, timedelta
 from . import widgets as Widgets
@@ -27,8 +27,7 @@ def __show_page(app, page:Adw.NavigationPage):
 
 def __show_custom_toast(app, model_id:str, title_property:str, subtitle:str, icon_name:str=None):
     # Thread safe
-    integration = get_current_integration()
-    model = integration.loaded_models.get(model_id)
+    model = app.get_property('integration').loaded_models.get(model_id)
     custom_widget = Adw.ActionRow(
         title=model.get_property(title_property) if model else title_property,
         subtitle=subtitle
@@ -60,7 +59,7 @@ def __show_custom_toast(app, model_id:str, title_property:str, subtitle:str, ico
 def __save_playlist_resume(app):
     # Check if current queue origin is a playlist if so, save the resume state
     # Call in different thread
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     queue_origin = integration.get_property('current-state').get_property('queueOrigin') or ""
     if model := integration.loaded_models.get(queue_origin):
         if isinstance(model, models.Playlist):
@@ -73,7 +72,7 @@ def __save_playlist_resume(app):
             )
 
 def __replace_queue(app, songs:list, current_id:str=None, origin_id:str=""):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     __save_playlist_resume(app)
     integration.get_property('current-state').set_property('queueOrigin', origin_id)
     queue_model = integration.get_property('current-state').get_property('queueModel')
@@ -91,7 +90,7 @@ def __replace_queue(app, songs:list, current_id:str=None, origin_id:str=""):
         threading.Thread(target=generate_auto_play_queue, args=(app, False), daemon=True).start()
 
 def __play_next(app, songs:list):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     __save_playlist_resume(app)
     integration.get_property('current-state').set_property('queueOrigin', "")
     current_song_id = integration.get_property('current-state').get_property('songId')
@@ -113,7 +112,7 @@ def __play_next(app, songs:list):
         )
 
 def __play_later(app, songs:list):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     __save_playlist_resume(app)
     integration.get_property('current-state').set_property('queueOrigin', "")
     current_song_id = integration.get_property('current-state').get_property('songId')
@@ -170,7 +169,7 @@ def search(app):
 
 def launch_playback(app):
     GLib.idle_add(app.main_window.main_stack.set_visible_child_name, 'loading')
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     prev_month = datetime.now().replace(day=1) - timedelta(days=1)
     top_songs = []
     for songId, plays in integration.getPlaybackScrobble(prev_month.strftime("%m-%Y")):
@@ -191,7 +190,7 @@ def launch_playback(app):
         GLib.idle_add(app.main_window.main_stack.set_visible_child_name, 'content')
 
 def generate_auto_play_queue(app, replace_on_finish:bool):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.get_property('current-state').set_property('generatingQueue', True)
     queue_model = integration.get_property('current-state').get_property('queueModel')
     generated_queue_model = integration.get_property('current-state').get_property('generatedQueue')
@@ -255,7 +254,7 @@ def visit_url(app, url:str):
     Gio.AppInfo.launch_default_for_uri(url, None)
 
 def toggle_star(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     if model_id in integration.loaded_models:
         model = integration.loaded_models.get(model_id)
         if model.get_property('starred'):
@@ -278,8 +277,7 @@ def lazy_reload_window(app):
     reload(app)
 
 def logout(app):
-    integration = get_current_integration()
-    threading.Thread(target=integration.terminate_instance, daemon=True).start()
+    threading.Thread(target=app.get_property('integration').terminate_instance, daemon=True).start()
     settings = Gio.Settings(schema_id="com.jeffser.Nocturne")
     settings.set_string('integration-user', '')
     settings.set_string('selected-instance-type', '')
@@ -350,8 +348,7 @@ def open_popout_window(app, fullscreened:bool=False):
     GLib.idle_add(app.popout_window.present)
 
 def toggle_fullscreen(app):
-    integration = get_current_integration()
-    if integration.get_property('current-state').get_property('queueModel').get_property('n-items') > 0:
+    if app.get_property('integration').get_property('current-state').get_property('queueModel').get_property('n-items') > 0:
         if popout_window := app.popout_window:
             GLib.idle_add(popout_window.present)
             if popout_window.is_fullscreen():
@@ -362,7 +359,7 @@ def toggle_fullscreen(app):
             open_popout_window(app, True)
 
 def set_rating(app, data):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     if model := integration.loaded_models.get(data.get('model_id')):
         if new_rating := data.get('rating'):
             if new_rating == model.get_property('userRating'):
@@ -409,14 +406,14 @@ def player_lower_volume(app):
 # -- RADIO --
 
 def play_radio(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     if model_id in [so.get_string() for so in integration.get_property('current-state').get_property('queueModel')]:
         integration.get_property('current-state').set_property('songId', model_id)
     else:
         __replace_queue(app, [model_id])
 
 def update_radio(app, model_id:str=""):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     model = integration.loaded_models.get(model_id) if model_id else None
 
     def response(dialog, task, name_el, stream_el):
@@ -427,7 +424,6 @@ def update_radio(app, model_id:str=""):
             if not stream.startswith('http'):
                 stream = 'http://' + stream
             if name and (stream or not stream_el.get_visible()):
-                integration = get_current_integration()
                 if model_id:
                     result = integration.updateInternetRadioStation(
                         model_id,
@@ -482,7 +478,7 @@ def add_radio(app):
     update_radio(app)
 
 def delete_radio(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     model = integration.loaded_models.get(model_id)
 
     def do_delete():
@@ -515,7 +511,7 @@ def delete_radio(app, model_id:str):
 # -- SONG --
 
 def play_song(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     if model_id in [so.get_string() for so in integration.get_property('current-state').get_property('queueModel')]:
         integration.get_property('current-state').set_property('songId', model_id)
     else:
@@ -554,8 +550,7 @@ def edit_lyrics(app):
     GLib.idle_add(Widgets.LyricsDialog().present, app.props.active_window)
 
 def play_random_queue(app):
-    integration = get_current_integration()
-    __replace_queue(app, integration.getRandomSongs())
+    __replace_queue(app, app.get_property('integration').getRandomSongs())
 
 def show_song_details(app, model_id):
     dialog = Widgets.SongDetailsDialog(model_id)
@@ -567,33 +562,32 @@ def show_album(app, model_id:str):
     __show_page(app, Widgets.AlbumPage(model_id))
 
 def show_album_from_song(app, model_id:str):
-    integration = get_current_integration()
-    if model := integration.loaded_models.get(model_id):
+    if model := app.get_property('integration').loaded_models.get(model_id):
         if album_id := model.get_property('albumId'):
             __show_page(app, Widgets.AlbumPage(album_id))
 
 def play_album(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if album := integration.loaded_models.get(model_id):
         __replace_queue(app, [s.get('id') for s in album.get_property('song')], origin_id=model_id)
 
 def play_album_next(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if album := integration.loaded_models.get(model_id):
         __play_next(app, [s.get('id') for s in album.get_property('song')])
         __show_custom_toast(app, model_id, 'name', _('Playing Next'))
 
 def play_album_later(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if album := integration.loaded_models.get(model_id):
         __play_later(app, [s.get('id') for s in album.get_property('song')])
         __show_custom_toast(app, model_id, 'name', _('Playing Later'))
 
 def play_album_shuffle(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if album := integration.loaded_models.get(model_id):
         song_list = [s.get('id') for s in album.get_property('song')]
@@ -606,13 +600,13 @@ def show_playlist(app, model_id:str):
     __show_page(app, Widgets.PlaylistPage(model_id))
 
 def play_playlist(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     if playlist := integration.loaded_models.get(model_id):
         integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
         __replace_queue(app, [s.get('id') for s in playlist.get_property('entry')], origin_id=model_id)
 
 def resume_playlist(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyPlaylist(model_id, force_update=True, use_threading=False)
     current_id, timestamp = integration.getPlaylistResume(model_id)
     integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
@@ -630,21 +624,21 @@ def resume_playlist(app, model_id:str):
     ) and False)
 
 def play_playlist_next(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     if playlist := integration.loaded_models.get(model_id):
         integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
         __play_next(app, [s.get('id') for s in playlist.get_property('entry')])
         __show_custom_toast(app, model_id, 'name', _("Playing Next"))
 
 def play_playlist_later(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     if playlist := integration.loaded_models.get(model_id):
         integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
         __play_later(app, [s.get('id') for s in playlist.get_property('entry')])
         __show_custom_toast(app, model_id, 'name', _("Playing Later"))
 
 def play_playlist_shuffle(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     if playlist := integration.loaded_models.get(model_id):
         integration.verifyPlaylist(playlist.get_property('id'), force_update=True, use_threading=False)
         song_list = [s.get('id') for s in playlist.get_property('entry')]
@@ -652,7 +646,7 @@ def play_playlist_shuffle(app, model_id:str):
         __replace_queue(app, song_list, origin_id=model_id)
 
 def update_playlist(app, model_id:str=None):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
 
     def do_update(name:str):
         if result := integration.createPlaylist(name, playlistId=model_id):
@@ -697,8 +691,7 @@ def remove_songs_from_playlist(app, data:dict):
     playlist_id = data.get('playlist', "")
     song_list = data.get('indexes', [])
     if playlist_id and song_list:
-        integration = get_current_integration()
-        if result := integration.updatePlaylist(playlist_id, songIndexToRemove=song_list):
+        if result := app.get_property('integration').updatePlaylist(playlist_id, songIndexToRemove=song_list):
             __show_custom_toast(app, playlist_id, "name", ngettext("{} Song Removed", "{} Songs Removed", len(song_list)).format(len(song_list)))
 
 def prompt_add_songs_to_playlist(app, song_list:list):
@@ -710,14 +703,14 @@ def prompt_add_song_to_playlist(app, model_id:str):
     GLib.idle_add(dialog.present, app.props.active_window)
 
 def prompt_add_album_to_playlist(wiappndow, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if model := integration.loaded_models.get(model_id):
         dialog = Widgets.playlist.PlaylistDialog([s.get('id') for s in model.get_property('song')])
         GLib.idle_add(dialog.present, app.props.active_window)
 
 def add_songs_to_playlist(app, data):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     for dialog in app.props.active_window.get_dialogs():
         GLib.idle_add(dialog.close)
 
@@ -747,7 +740,7 @@ def add_songs_to_playlist(app, data):
             __show_custom_toast(app, data.get('playlist'), 'name', ' | '.join(message))
 
 def delete_playlist(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     model = integration.loaded_models.get(model_id)
 
     def response(dialog, task, model):
@@ -774,13 +767,12 @@ def show_artist(app, model_id:str):
     __show_page(app, Widgets.ArtistPage(model_id))
 
 def show_artist_from_song(app, model_id:str):
-    integration = get_current_integration()
-    if model := integration.loaded_models.get(model_id):
+    if model := app.get_property('integration').loaded_models.get(model_id):
         if artist_id := model.get_property('artistId'):
             __show_page(app, Widgets.ArtistPage(artist_id))
 
 def show_artist_from_album(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if model := integration.loaded_models.get(model_id):
         if artist_id := model.get_property('artistId'):
@@ -790,7 +782,7 @@ def show_artist_from_album(app, model_id:str):
                 __show_page(app, Widgets.ArtistPage(artist_id))
 
 def play_shuffle_artist(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyArtist(model_id, force_update=True, use_threading=False)
     model = integration.loaded_models.get(model_id)
     if model:
@@ -804,8 +796,7 @@ def play_shuffle_artist(app, model_id:str):
             play_songs(app, random.sample(songs, min(20, len(songs))))
 
 def play_radio_artist(app, model_id:str):
-    integration = get_current_integration()
-    songs = integration.getSimilarSongs(model_id)
+    songs = app.get_property('integration').getSimilarSongs(model_id)
     if len(songs) > 0:
         play_songs(app, songs)
     else:
@@ -825,7 +816,7 @@ def show_genre(window, model_id:str):
 def __request_song_download(model_id:str) -> bool:
     # returns true if download is started (not finished)
     # should be called in different thread (cause of verifySong)
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifySong(model_id, use_threading=False)
     if song_model := integration.loaded_models.get(model_id):
         download_queue = integration.get_property('current-state').get_property('downloadQueueModel')
@@ -871,7 +862,6 @@ def download_songs(app, model_list:str):
     if len(model_list) == 1:
         download_song(app, model_list[0])
         return
-    integration = get_current_integration()
     successful_starts = 0
     for songId in model_list:
         successful_starts += 1 if __request_song_download(songId) else 0
@@ -903,7 +893,7 @@ def download_songs(app, model_list:str):
         )
 
 def download_album(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyAlbum(model_id, force_update=True, use_threading=False)
     if model := integration.loaded_models.get(model_id):
         song_ids = [song.get('id') for song in model.get_property('song')]
@@ -936,7 +926,7 @@ def download_album(app, model_id:str):
             )
 
 def download_playlist(app, model_id:str):
-    integration = get_current_integration()
+    integration = app.get_property('integration')
     integration.verifyPlaylist(model_id, force_update=True, use_threading=False)
     if model := integration.loaded_models.get(model_id):
         song_ids = [song.get('id') for song in model.get_property('entry')]
@@ -971,8 +961,7 @@ def download_playlist(app, model_id:str):
 def __request_download_delete(model_id:str) -> bool:
     # returns true if download is deleted
     # should call del loaded_models[id] after toast is shown
-    integration = get_current_integration()
-    if model := integration.loaded_models.get(model_id):
+    if model := app.get_property('integration').loaded_models.get(model_id):
         try:
             model.set_property('deleted', True)
             os.remove(model.get_property('path'))
@@ -982,7 +971,6 @@ def __request_download_delete(model_id:str) -> bool:
     return False
 
 def delete_download(app, model_id:str):
-    integration = get_current_integration()
     deleted = __request_download_delete(model_id)
     if deleted:
         __show_custom_toast(
@@ -991,16 +979,15 @@ def delete_download(app, model_id:str):
             'title',
             _("Deleted")
         )
-        del integration.loaded_models[model_id]
+        del app.get_property('integration').loaded_models[model_id]
 
 def delete_downloads(app, model_list:list):
-    integration = get_current_integration()
     successful_deletes = 0
     for songId in model_list:
         deleted = __request_download_delete(songId)
         successful_deletes += 1 if deleted else 0
         if deleted:
-            del integration.loaded_models[songId]
+            del app.get_property('integration').loaded_models[songId]
 
     __show_custom_toast(
         app,
