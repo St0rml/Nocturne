@@ -33,7 +33,7 @@ from gi.repository import GObject, Gtk, Gdk, Gio, Adw, GLib
 from .window import NocturneWindow
 from .preferences import NocturnePreferences
 from .constants import get_song_info_from_file, CLI_ARGUMENTS, TRANSLATORS, COPYRIGHT_NOTICE, set_version
-from .integrations import get_current_integration, set_current_integration, get_available_integrations, models, Base
+from .integrations import set_current_integration, get_available_integrations, models, Base
 from .widgets.playing import Player
 from .widgets.pages import LoginDialog
 
@@ -58,7 +58,7 @@ class NocturneService:
         self.app = app
 
     def Search(self, query:str) -> dict:
-        if integration := get_current_integration():
+        if integration := self.app.get_property('integration'):
             results = integration.systemSearch(query)
             return results
         return {}
@@ -182,17 +182,16 @@ class NocturneApplication(Adw.Application):
 
     def do_open(self, files, n_files=None, hint=None):
         self.external_songs = []
-        integration = get_current_integration()
         for file in files:
             result_path = file.get_path()
             audio_info = get_song_info_from_file(result_path, is_external_file=True)
             audio_info['id'] = 'EXTERNAL_SONG:{}'.format(result_path)
             if audio_info:
                 self.external_songs.append(models.Song(**audio_info))
-                if integration:
+                if integration := self.get_property('integration'):
                     integration.loaded_models[audio_info.get('id')] = self.external_songs[-1]
 
-        if self.main_window and integration:
+        if self.main_window and self.get_property('integration'):
             target_value = GLib.Variant('as', [a.id for a in self.external_songs])
             self.main_window.activate_action('app.play_songs', target_value)
             self.external_songs = []
