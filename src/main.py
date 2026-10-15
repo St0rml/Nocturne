@@ -217,7 +217,9 @@ class NocturneApplication(Adw.Application):
         about.present(self.props.active_window)
 
     def on_preferences_action(self, widget, _):
-        NocturnePreferences().present(self.props.active_window)
+        dialog = NocturnePreferences()
+        dialog.present(self.props.active_window)
+        GLib.idle_add(dialog.setup)
 
     def create_action(self, name, callback, shortcuts=None, parameter_type=None):
         action = Gio.SimpleAction.new(name, parameter_type)

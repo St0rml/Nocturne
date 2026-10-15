@@ -2,7 +2,7 @@
 
 from gi.repository import GObject, Gtk, Adw, GLib, Gio, Gdk, Pango, Xdp, XdpGtk4, Gly
 
-from .integrations import get_current_integration, secret
+from .integrations import secret
 from .constants import SIDEBAR_MENU, BITRATE_OPTIONS, IN_FLATPAK, CACHE_DIR, DATA_DIR, SIDEBAR_DECORATION_PATH
 import os, threading, shutil
 
@@ -152,7 +152,6 @@ class NocturnePreferences(Adw.PreferencesDialog):
     def __init__(self):
         super().__init__()
         settings = Gio.Settings(schema_id="com.jeffser.Nocturne")
-        integration = get_current_integration()
 
         # General
         ## Behavior
@@ -207,10 +206,6 @@ class NocturnePreferences(Adw.PreferencesDialog):
             self.bitrate_el.get_model().append(title)
             if kbps == selected_bitrate:
                 self.bitrate_el.set_selected(len(self.max_bitrate_dict) - 1)
-        if integration:
-            self.bitrate_el.set_visible('no-max-bitrate' not in integration.limitations)
-        else:
-            self.bitrate_el.set_visible(False)
 
         ## Gnome Search
         self.gnome_search_group_el.set_visible("GNOME" in os.environ.get("XDG_CURRENT_DESKTOP", "").upper())
@@ -261,7 +256,6 @@ class NocturnePreferences(Adw.PreferencesDialog):
         self.listenbrainz_stack_el.set_visible_child_name("unlink" if secret.get_plain_password(schema_type="listenbrainz") else "link")
 
         ### Instance Row
-        self.session_group_el.set_visible(integration)
         self.instance_el.set_visible(False)
         threading.Thread(target=self.update_instance_row).start()
 
@@ -456,29 +450,45 @@ class NocturnePreferences(Adw.PreferencesDialog):
             alpha=1
         ))
 
+    def setup(self):
+        # After it has been shown, called with glib.idle_add
+        integration = None
+        if root := self.get_root():
+            if app := root.get_application():
+                integration = app.get_property('integration')
+        self.session_group_el.set_visible(integration)
+        if integration:
+            self.bitrate_el.set_visible('no-max-bitrate' not in integration.limitations)
+        else:
+            self.bitrate_el.set_visible(False)
+
     def update_instance_row(self):
-        if integration := get_current_integration():
-            data = integration.getServerInformation()
-            GLib.idle_add(self.instance_el.set_title, data.get('username', ""))
+        if root := self.get_root():
+            if app := root.get_application():
+                if integration := app.get_property('integration'):
+                    data = integration.getServerInformation()
+                    GLib.idle_add(self.instance_el.set_title, data.get('username', ""))
 
-            GLib.idle_add(self.instance_el.set_subtitle, data.get('title', ""))
+                    GLib.idle_add(self.instance_el.set_subtitle, data.get('title', ""))
 
-            GLib.idle_add(self.instance_el.set_tooltip_text, data.get('link'))
-            GLib.idle_add(self.instance_el.set_action_target_value, GLib.Variant('s', data.get('link', '')))
-            GLib.idle_add(self.instance_icon_el.set_visible, data.get('link'))
-            GLib.idle_add(self.instance_el.set_activatable, data.get('link'))
+                    GLib.idle_add(self.instance_el.set_tooltip_text, data.get('link'))
+                    GLib.idle_add(self.instance_el.set_action_target_value, GLib.Variant('s', data.get('link', '')))
+                    GLib.idle_add(self.instance_icon_el.set_visible, data.get('link'))
+                    GLib.idle_add(self.instance_el.set_activatable, data.get('link'))
 
-            GLib.idle_add(self.instance_avatar_el.set_custom_image, data.get('picture'))
-            GLib.idle_add(self.instance_avatar_el.set_text, data.get('username', ''))
-            GLib.idle_add(self.instance_el.set_visible, data)
+                    GLib.idle_add(self.instance_avatar_el.set_custom_image, data.get('picture'))
+                    GLib.idle_add(self.instance_avatar_el.set_text, data.get('username', ''))
+                    GLib.idle_add(self.instance_el.set_visible, data)
 
     def append_library_row(self):
-        if integration := get_current_integration():
-            self.library_list, multiselect = integration.getLibraries()
-            if len(self.library_list) > 1 and multiselect:
-                    self.show_library_expander_row()
-            elif self.library_list and not multiselect:
-                    self.show_library_combo_row()
+        if root := self.get_root():
+            if app := root.get_application():
+                if integration := app.get_property('integration'):
+                    self.library_list, multiselect = integration.getLibraries()
+                    if len(self.library_list) > 1 and multiselect:
+                            self.show_library_expander_row()
+                    elif self.library_list and not multiselect:
+                            self.show_library_combo_row()
 
     def show_library_expander_row(self):
         stored_ids = Gio.Settings(schema_id="com.jeffser.Nocturne").get_strv("library-ids")
@@ -615,8 +625,11 @@ class NocturnePreferences(Adw.PreferencesDialog):
 
         def instance_information_run():
             try:
-                integration = get_current_integration()
-                data = integration.getServerInformation()
+                data = {}
+                if root := self.get_root():
+                    if app := root.get_application():
+                        if integration := app.get_property('integration'):
+                            data = integration.getServerInformation()
                 if username := data.get('username'):
                     settings.set_string("welcome-user-home", username)
                     if profile_picture := data.get('picture'):

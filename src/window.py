@@ -20,7 +20,7 @@
 from gi.repository import Gtk, Adw, GLib, Gio, GObject, Pango, Gly
 
 from . import actions
-from .integrations import get_current_integration, models
+from .integrations import models
 from .constants import SIDEBAR_MENU, SIDEBAR_DECORATION_PATH
 import threading, os
 from datetime import datetime, timedelta
@@ -58,7 +58,7 @@ class NocturneWindow(Adw.ApplicationWindow):
     @Gtk.Template.Callback()
     def close_request(self, window):
         if not self.get_hide_on_close():
-            if integration := get_current_integration():
+            if integration := self.get_application().get_property('integration'):
                 threading.Thread(target=self.shutdown_integration, args=(self.quit_app,), daemon=True).start()
                 return True #intercept close
             else:
@@ -66,7 +66,7 @@ class NocturneWindow(Adw.ApplicationWindow):
 
 
     def shutdown_integration(self, callback):
-        if integration := get_current_integration():
+        if integration := self.get_application().get_property('integration'):
             id_list = [so.get_string() for so in integration.get_property('current-state').get_property('queueModel')]
             queue_origin = integration.get_property('current-state').get_property('queueOrigin')
             song_id = integration.get_property('current-state').get_property('songId')
@@ -168,7 +168,7 @@ class NocturneWindow(Adw.ApplicationWindow):
             threading.Thread(target=self.main_navigationview.get_visible_page().reload, daemon=True).start()
 
     def update_playlist_section_of_sidebar(self, section_el):
-        integration = get_current_integration()
+        integration = self.get_application().get_property('integration')
         integration.connect('notify::loadingMessage', lambda integration, ud: self.update_loading_message(integration))
         if integration.get_property('loadingMessage'):
             self.update_loading_message(integration)
@@ -209,7 +209,7 @@ class NocturneWindow(Adw.ApplicationWindow):
         self.setup_sidebar()
         self.sidebar_playing_page.show_sidebar_el.set_visible(False)
         threading.Thread(target=self.notify_playback).start()
-        integration = get_current_integration()
+        integration = self.get_application().get_property('integration')
         integration.connect_to_state('buttonState', self.playback_changed)
         integration.connect_to_state('songId', self.song_changed)
 
@@ -231,7 +231,7 @@ class NocturneWindow(Adw.ApplicationWindow):
         # Notifies user if Nocturne Playback is ready for this month
         prev_month = datetime.now().replace(day=1) - timedelta(days=1)
         if prev_month.strftime("%m-%Y") != self.settings.get_value('last-playback-checked').unpack():
-            integration = get_current_integration()
+            integration = self.get_application().get_property('integration')
             top_songs = []
             for songId, plays in integration.getPlaybackScrobble(prev_month.strftime("%m-%Y")):
                 integration.verifySong(songId, use_threading=False)
@@ -389,7 +389,7 @@ class NocturneWindow(Adw.ApplicationWindow):
 
     @Gtk.Template.Callback()
     def big_breakpoint_toggled(self, bp=None):
-        if integration := get_current_integration():
+        if integration := self.get_application().get_property('integration'):
             song_playing = bool(integration.get_property('current-state').get_property('songId'))
         else:
             song_playing = False
