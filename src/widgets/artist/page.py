@@ -101,7 +101,7 @@ class ArtistPage(Adw.NavigationPage):
         if top_songs:
             GLib.idle_add(configure)
         else:
-            GLib.idle_add(self.top_songs_wrapbox.set_visible(False))
+            GLib.idle_add(self.top_songs_wrapbox.set_visible, False)
 
     def update_background(self, raw_bytes:bytes):
         def run():
