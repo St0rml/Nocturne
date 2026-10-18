@@ -109,7 +109,7 @@ class AlbumPage(Adw.NavigationPage):
             return getattr(self, '_song_list_generation', None) == generation
         def add_row(song_id):
             song_row = SongRow(song_id)
-            song_row.cover_el.set_visible(False)
+            song_row.set_property('cover-visible', False)
             self.song_list_el.list_el.append(song_row)
         def run():
             integration = get_current_integration()

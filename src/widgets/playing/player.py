@@ -609,6 +609,7 @@ class Player(GObject.Object):
             self.application.css_provider.load_from_string('')
             if integration := get_current_integration():
                 integration.get_property('current-state').set_property('accentColor', [0,0,0])
+            return
         raw_bytes = paintable.save_to_png_bytes().get_data()
         if not raw_bytes:
             return

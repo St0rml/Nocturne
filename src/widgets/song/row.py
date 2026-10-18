@@ -14,8 +14,8 @@ class SongRow(Adw.ActionRow):
     model = GObject.Property(type=models.Song)
     draggable = GObject.Property(type=bool, default=False)
     removable = GObject.Property(type=bool, default=False)
+    cover_visible = GObject.Property(type=bool, default=True)
 
-    icon_el = Gtk.Template.Child()
     cover_el = Gtk.Template.Child()
     title_el = Gtk.Template.Child()
     duration_el = Gtk.Template.Child()
@@ -47,6 +47,24 @@ class SongRow(Adw.ActionRow):
         integration.connect_to_model(self.id, 'deleted', self.delete_status_changed)
 
     @Gtk.Template.Callback()
+    def format_cover_stack_visible_child_name(self, obj, currentSongId:str, cover:Gdk.Paintable, draggable:bool, cover_visible:bool) -> str:
+        if cover_visible and cover:
+            return 'cover'
+        elif self.id == currentSongId:
+            return 'play-indicator'
+        elif draggable:
+            return 'drag-indicator'
+        return 'none'
+
+    @Gtk.Template.Callback()
+    def format_is_playing(self, obj, currentSongId:str) -> bool:
+        return self.id == currentSongId
+
+    @Gtk.Template.Callback()
+    def format_cover_stack_visible(self, obj, visibleChildName:str) -> bool:
+        return visibleChildName != 'none'
+
+    @Gtk.Template.Callback()
     def format_action_target(self, obj, value, variant) -> GLib.Variant:
         return GLib.Variant(variant, value)
 
@@ -70,10 +88,6 @@ class SongRow(Adw.ActionRow):
             self.star_el.remove_css_class('accent')
             self.star_el.add_css_class('dim-label')
         return "heart-filled-symbolic" if starred else "heart-outline-thick-symbolic"
-
-    @Gtk.Template.Callback()
-    def format_is_playing(self, obj, currentSongId:str) -> bool:
-        return self.id == currentSongId
 
     @Gtk.Template.Callback()
     def format_starred_visibility(self, obj, isExternalFile:bool, radioStreamUrl:str) -> bool:
@@ -228,10 +242,6 @@ class SongRow(Adw.ActionRow):
             self.artist_container_el.set_child(button)
 
     # -- Callbacks --
-
-    @Gtk.Template.Callback()
-    def format_pixel_size(self, obj, paintable:Gdk.Paintable) -> int:
-        return 48 if paintable else -1
 
     @Gtk.Template.Callback()
     def on_drop(self, drop_target, row, x, y):

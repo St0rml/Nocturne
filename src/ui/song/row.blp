@@ -33,43 +33,78 @@ template $NocturneSongRow: Adw.ActionRow {
     vexpand: true;
     hexpand: true;
 
-    Gtk.Overlay {
-      styles [
-        "card"
-      ]
-      overflow: hidden;
-
+    Gtk.Stack cover_stack {
       Gtk.DragSource {
         drag-begin => $on_drag_begin();
         prepare => $on_drag_prepare();
         actions: move;
       }
+      hhomogeneous: false;
+      transition-type: crossfade;
+      visible-child-name: bind $format_cover_stack_visible_child_name(
+        template.root as <$NocturneWindow> .application as <$NocturneApplication> .integration as <$NocturneIntegrationBase> .current-state as <$NocturneModelCurrentState> .songId,
+        template.model as <$NocturneModelSong> .gdkPaintable,
+        template.draggable,
+        template.cover-visible
+      );
+      visible: bind $format_cover_stack_visible(cover_stack.visible-child-name);
 
-      child: Gtk.Image cover_el {
-        accessibility {
-          label: _("Song cover art");
-        }
-        height-request: 48;
-        width-request: 48;
-        overflow: hidden;
-        valign: center;
-        halign: center;
-        paintable: bind template.model as <$NocturneModelSong> .gdkPaintable;
-        pixel-size: bind $format_pixel_size(template.model as <$NocturneModelSong> .gdkPaintable);
-      };
+      Gtk.StackPage {
+        name: "none";
+        child: Adw.Bin {};
+      }
 
-      [overlay]
-      Gtk.Image icon_el {
-        icon-size: large;
-        visible: bind $format_is_playing(template.root as <$NocturneWindow> .application as <$NocturneApplication> .integration as <$NocturneIntegrationBase> .current-state as <$NocturneModelCurrentState> .songId);
-        icon-name: "sound-symbolic";
-        styles [
-          "osd"
-        ]
+      Gtk.StackPage {
+        name: "play-indicator";
+        child: Gtk.Image {
+          icon-name: "sound-symbolic";
+          accessibility {
+            label: _("Playing indicator");
+          }
+        };
+      }
 
-        accessibility {
-          label: _("Playing indicator");
-        }
+      Gtk.StackPage {
+        name: "drag-indicator";
+        child: Gtk.Image {
+          icon-name: "list-drag-handle-symbolic";
+          accessibility {
+            label: _("Drag indicator");
+          }
+        };
+      }
+
+      Gtk.StackPage {
+        name: "cover";
+        child: Gtk.Overlay {
+          styles [
+            "card"
+          ]
+          width-request: 48;
+          height-request: 48;
+          overflow: hidden;
+          child: Gtk.Image cover_el {
+            accessibility {
+              label: _("Song cover art");
+            }
+            pixel-size: 48;
+            overflow: hidden;
+            valign: center;
+            halign: center;
+            paintable: bind template.model as <$NocturneModelSong> .gdkPaintable;
+          };
+          [overlay]
+          Gtk.Image {
+            styles [
+              "osd"
+            ]
+            visible: bind $format_is_playing(template.root as <$NocturneWindow> .application as <$NocturneApplication> .integration as <$NocturneIntegrationBase> .current-state as <$NocturneModelCurrentState> .songId);
+            icon-name: "sound-symbolic";
+            accessibility {
+              label: _("Playing indicator");
+            }
+          }
+        };
       }
     }
 
