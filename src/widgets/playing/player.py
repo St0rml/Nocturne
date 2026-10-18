@@ -607,7 +607,8 @@ class Player(GObject.Object):
         # Load Image
         if not paintable:
             self.application.css_provider.load_from_string('')
-            integration.get_property('current-state').set_property('accentColor', [0,0,0])
+            if integration := get_current_integration():
+                integration.get_property('current-state').set_property('accentColor', [0,0,0])
         raw_bytes = paintable.save_to_png_bytes().get_data()
         if not raw_bytes:
             return
