@@ -72,17 +72,12 @@ class SongRow(Adw.ActionRow):
         return "heart-filled-symbolic" if starred else "heart-outline-thick-symbolic"
 
     @Gtk.Template.Callback()
-    def format_starred_visibility(self, obj, isExternalFile:bool, radioStreamUrl:str) -> bool:
-        return not isExternalFile and not radioStreamUrl
+    def format_is_playing(self, obj, currentSongId:str) -> bool:
+        return self.id == currentSongId
 
     @Gtk.Template.Callback()
-    def format_icon_name(self, obj, currentSongId:str, draggable:bool) -> str | None:
-        if currentSongId == self.id:
-            self.add_css_class('accent')
-            return 'sound-symbolic'
-        self.remove_css_class('accent')
-        if draggable:
-            return 'list-drag-handle-symbolic'
+    def format_starred_visibility(self, obj, isExternalFile:bool, radioStreamUrl:str) -> bool:
+        return not isExternalFile and not radioStreamUrl
 
     @Gtk.Template.Callback()
     def format_activatable(self, obj, currentSongId:str) -> bool:

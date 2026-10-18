@@ -33,41 +33,44 @@ template $NocturneSongRow: Adw.ActionRow {
     vexpand: true;
     hexpand: true;
 
-    Gtk.Image icon_el {
-      valign: center;
-      icon-name: bind $format_icon_name(
-        template.root as <$NocturneWindow> .application as <$NocturneApplication> .integration as <$NocturneIntegrationBase> .current-state as <$NocturneModelCurrentState> .songId,
-        template.draggable
-      );
-      visible: bind $format_to_bool(icon_el.icon-name);
+    Gtk.Overlay {
       styles [
-        "dimmed"
+        "card"
       ]
+      overflow: hidden;
 
       Gtk.DragSource {
         drag-begin => $on_drag_begin();
         prepare => $on_drag_prepare();
         actions: move;
       }
-      accessibility {
-        label: _("Drag icon");
-      }
-    }
 
-    Gtk.Image cover_el {
-      styles [
-        "card"
-      ]
-      accessibility {
-        label: _("Song cover art");
+      child: Gtk.Image cover_el {
+        accessibility {
+          label: _("Song cover art");
+        }
+        height-request: 48;
+        width-request: 48;
+        overflow: hidden;
+        valign: center;
+        halign: center;
+        paintable: bind template.model as <$NocturneModelSong> .gdkPaintable;
+        pixel-size: bind $format_pixel_size(template.model as <$NocturneModelSong> .gdkPaintable);
+      };
+
+      [overlay]
+      Gtk.Image icon_el {
+        icon-size: large;
+        visible: bind $format_is_playing(template.root as <$NocturneWindow> .application as <$NocturneApplication> .integration as <$NocturneIntegrationBase> .current-state as <$NocturneModelCurrentState> .songId);
+        icon-name: "sound-symbolic";
+        styles [
+          "osd"
+        ]
+
+        accessibility {
+          label: _("Playing indicator");
+        }
       }
-      height-request: 48;
-      width-request: 48;
-      overflow: hidden;
-      valign: center;
-      halign: center;
-      paintable: bind template.model as <$NocturneModelSong> .gdkPaintable;
-      pixel-size: bind $format_pixel_size(template.model as <$NocturneModelSong> .gdkPaintable);
     }
 
     Gtk.Box {
