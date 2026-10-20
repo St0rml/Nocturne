@@ -411,7 +411,6 @@ class Player(GObject.Object):
 
     def handle_song_change_request(self, action:str):
         # action can be next, previous or end (song ended)
-
         if current_song_id := self.get_property('songId'):
             position = self.get_property('positionSeconds')
             if song := self.get_property('currentSong'):
