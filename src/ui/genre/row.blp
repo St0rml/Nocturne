@@ -1,0 +1,45 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $NocturneGenreRow: Adw.ActionRow {
+  action-name: "app.show_genre";
+  action-target: bind $format_action_target(template.model as <$NocturneModelGenre> .id, 's');
+  activatable: true;
+  use-markup: false;
+  title: bind template.model as <$NocturneModelGenre> .value;
+  subtitle: bind $format_album_song_count_label(template.model as <$NocturneModelGenre> .albumCount, template.model as <$NocturneModelGenre> .songCount);
+  name: bind template.model as <$NocturneModelGenre> .value;
+
+  Gtk.GestureClick {
+    button: 3;
+    released => $show_popover();
+  }
+  Gtk.GestureLongPress {
+    pressed => $show_popover();
+  }
+
+  [prefix]
+  Adw.Avatar avatar_el {
+    styles [
+      "p10"
+    ]
+    size: 48;
+    custom-image: bind template.model as <$NocturneModelGenre> .gdkPaintable;
+    icon-name: "tag-symbolic";
+  }
+
+  [suffix]
+  Gtk.MenuButton menu_button_el {
+    styles [
+      "circular",
+      "flat",
+    ]
+    icon-name: "view-more-symbolic";
+    valign: center;
+    notify::active => $on_context_button_active();
+    popover: Gtk.Popover {
+      child: Adw.Spinner {};
+    };
+    tooltip-text: _("Options");
+  }
+}

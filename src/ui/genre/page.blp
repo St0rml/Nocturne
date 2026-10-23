@@ -1,0 +1,81 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $NocturneGenrePage: Adw.NavigationPage {
+  title: bind template.model as <$NocturneModelGenre> .value;
+  name: bind template.model as <$NocturneModelGenre> .id;
+  child: Adw.ToolbarView {
+    extend-content-to-top-edge: true;
+
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    content: Gtk.ScrolledWindow {
+      propagate-natural-width: true;
+      propagate-natural-height: true;
+
+      child: Adw.Clamp clamp_el {
+        tightening-threshold: 800;
+        maximum-size: 2000;
+
+        child: Gtk.Box {
+          styles [
+            "p10"
+          ]
+          orientation: vertical;
+          spacing: 10;
+
+          Adw.WrapBox { // Information Container
+            margin-top: 40;
+            orientation: horizontal;
+            line-spacing: 10;
+            child-spacing: 10;
+            justify: fill;
+            wrap-policy: minimum;
+
+            Adw.Bin {
+              valign: center;
+
+              Gtk.Label name_el {
+                styles [
+                  "big-album-title"
+                ]
+                xalign: 0;
+                wrap: true;
+                wrap-mode: word_char;
+                lines: 1;
+                halign: start;
+                ellipsize: end;
+                valign: center;
+                label: bind template.model as <$NocturneModelGenre> .value;
+                visible: bind $format_to_bool(template.model as <$NocturneModelGenre> .value);
+              }
+            }
+          }
+
+          $NocturneWrapbox artists_wrapbox {
+            visible: bind $format_to_bool(template.model as <$NocturneModelGenre> .albumCount) as <bool>;
+            header-label: _("Artists");
+            header-icon-name: "music-artist-symbolic";
+          }
+
+          $NocturneWrapbox album_wrapbox {
+            visible: bind $format_to_bool(template.model as <$NocturneModelGenre> .albumCount) as <bool>;
+            header-label: _("Albums");
+            header-icon-name: "music-queue-symbolic";
+          }
+
+          $NocturneWrapbox song_list_el {
+            visible: bind $format_to_bool(template.model as <$NocturneModelGenre> .albumCount) as <bool>;
+            header-label: _("Songs");
+            header-icon-name: "music-artist-symbolic";
+          }
+
+
+        };
+      };
+    };
+  };
+}
