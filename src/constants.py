@@ -728,3 +728,16 @@ COVER_SIZE = {
     "big": 720,
     "small": 240
 }
+
+CONTEXT_GENRE = {
+    "play": {
+        "name": _("Play"),
+        "icon-name": "media-playback-start-symbolic",
+        "action-name": "app.play_genre"
+    },
+    "shuffle": {
+        "name": _("Shuffle"),
+        "icon-name": "media-playlist-shuffle-symbolic",
+        "action-name": "app.play_genre_shuffle"
+    }
+}

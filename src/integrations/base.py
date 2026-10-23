@@ -350,7 +350,12 @@ class Base(GObject.Object):
         logger.warning('method not implemented')
         return []
 
-    def verifyArtist(self, model_id:str, force_update:bool=False, use_threading:bool=True, minimal:bool=False):
+    def getGenres(self, size:int=10) -> list:
+        # add non existing elements to self.loaded_models, returns lists of IDs, nothing more
+        logger.warning('method not implemented')
+        return []
+
+    def verifyArtist(self, model_id:str, force_update:bool=False, use_threading:bool=True):
         # verifies that element is fully loaded with all it's metadata, should also call for updateCoverArt
         logger.warning('method not implemented')
 
