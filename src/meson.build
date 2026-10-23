@@ -29,6 +29,7 @@ blueprints = files(
   'ui/pages/welcome.blp',
   'ui/pages/setup.blp',
   'ui/pages/playback.blp',
+  'ui/pages/genres.blp',
 
   'ui/album/button.blp',
   'ui/album/page.blp',
@@ -58,6 +59,10 @@ blueprints = files(
 
   'ui/lyrics/dialog.blp',
   'ui/lyrics/edit_row.blp',
+
+  'ui/genre/button.blp',
+  'ui/genre/page.blp',
+  'ui/genre/row.blp',
 )
 
 blueprints = custom_target('blueprints',

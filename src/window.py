@@ -333,6 +333,8 @@ class NocturneWindow(Adw.ApplicationWindow):
         self.create_action(actions.delete_download)
         self.create_action(actions.delete_downloads, parameter_type="as")
 
+        self.create_action(actions.show_genre)
+
         self.set_property('default-width', self.settings.get_value('default-width').unpack())
         self.set_property('default-height', self.settings.get_value('default-height').unpack())
         self.set_property('hide-on-close', self.settings.get_value('hide-on-close').unpack())

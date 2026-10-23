@@ -1,0 +1,120 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $NocturneGenresPage: Adw.NavigationPage {
+  title: _("Genres");
+  tag: "genres";
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      [start]
+      Adw.ToggleGroup toggle_group_el {
+        active-name: "list";
+        Adw.Toggle {
+          icon-name: "view-list-bullet-symbolic";
+          tooltip: _("List");
+          name: "list";
+        }
+        Adw.Toggle {
+          icon-name: "grid-filled-symbolic";
+          tooltip: _("Grid");
+          name: "grid";
+        }
+      }
+
+      title-widget: Gtk.SearchEntry search_entry {
+        hexpand: true;
+        key-capture-widget: main_stack;
+        placeholder-text: _("Genres");
+        search-changed => $on_search();
+        accessibility {
+          label: _("Search genres");
+        }
+      };
+    }
+
+    content: Gtk.Stack main_stack {
+      transition-type: crossfade;
+      Gtk.StackPage {
+        name: "loading";
+        child: Adw.Spinner {};
+      }
+      Gtk.StackPage {
+        name: "content";
+        child: Gtk.ScrolledWindow scrolledwindow {
+          propagate-natural-width: true;
+          propagate-natural-height: true;
+          edge-reached => $scroll_edge_reached();
+          child: Adw.Clamp {
+            maximum-size: 2000;
+            tightening-threshold: 800;
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 5;
+
+              Gtk.Stack {
+                transition-type: crossfade;
+                visible-child-name: bind toggle_group_el.active-name;
+                interpolate-size: true;
+                vhomogeneous: false;
+
+                Gtk.StackPage {
+                  name: "list";
+                  child: Gtk.ListBox list_el {
+                    styles [
+                      "boxed-list",
+                      "m10"
+                    ]
+                    selection-mode: none;
+                    valign: start;
+                  };
+                }
+                Gtk.StackPage {
+                  name: "grid";
+                  child: Adw.WrapBox wrapbox_el {
+                    hexpand: true;
+                    halign: center;
+                    child-spacing: 10;
+                    line-spacing: 10;
+                    justify: spread;
+                    justify-last-line: true;
+                    styles [
+                      "m10"
+                    ]
+                  };
+                }
+              }
+
+              Gtk.Stack end_stack {
+                Gtk.StackPage {
+                  name: "loading";
+                  child: Adw.Spinner {};
+                }
+                Gtk.StackPage {
+                  name: "end";
+                  child: Gtk.Label {
+                    styles [
+                      "dimmed"
+                    ]
+                    label: _("Reached End of List");
+                    halign: center;
+                    wrap: true;
+                    wrap-mode: word_char;
+                    justify: center;
+                  };
+                }
+              }
+            };
+          };
+        };
+      }
+      Gtk.StackPage {
+        name: "no-content";
+        child: Adw.StatusPage {
+          icon-name: "sad-computer-symbolic";
+          title: _("No Genres Found");
+        };
+      }
+    };
+  };
+}

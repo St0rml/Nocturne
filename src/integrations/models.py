@@ -213,3 +213,32 @@ class CurrentState(GObject.Object):
     generatingQueue = GObject.Property(type=bool, default=False)
     downloadQueueModel = GObject.Property(type=Gio.ListStore, default=Gio.ListStore.new(item_type=SongDownload))
 
+
+class Genre(GObject.Object):
+    __gtype_name__ = 'NocturneModelGenre'
+
+    id = GObject.Property(type=str) # = Name of Genre (unique by definition)
+    coverArt = GObject.Property(type=str)
+    gdkPaintable = GObject.Property(type=Gdk.Paintable)
+    gdkPaintableBig = GObject.Property(type=Gdk.Paintable)
+    value = GObject.Property(type=str) # = Name of Genre
+    songCount = GObject.Property(type=int)
+    albumCount = GObject.Property(type=int)
+    albums = GObject.Property(type=GObject.TYPE_PYOBJECT, nick=_("Albums")) # list
+    artists = GObject.Property(type=GObject.TYPE_PYOBJECT, nick=_("Artists")) # list
+    readonly = GObject.Property(type=bool, default=False)
+
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.update_data(**kwargs)
+
+    def update_data(self, **kwargs):
+        for prop in self.list_properties():
+            if prop.get_name() in kwargs:
+                if self.get_property(prop.get_name()) != kwargs.get(prop.get_name()):
+                    self.set_property(prop.get_name(), kwargs.get(prop.get_name()))
+            elif self.get_property(prop.get_name()) is None:
+                if prop.value_type.name == 'PyObject': #LIST
+                    self.set_property(prop.get_name(), [])
+                else:
+                    self.set_property(prop.get_name(), prop.get_default_value())

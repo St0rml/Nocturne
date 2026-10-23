@@ -177,16 +177,16 @@ class Navidrome(Base):
                 'message': '{}\n"{}"'.format(_('Server returned an error'), response.get('error', {}).get('message', _('Unknown Error')))
             }
 
-    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0) -> list:
+    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0, genre:str="") -> list:
         # returns a list of IDs
         params = {
             'type': list_type,
             'size': size,
             'offset': offset,
+            'genre': genre,
             'musicFolderId': self.library_ids
         }
         response = self.make_request('getAlbumList2', params)
-
         album_ids = []
         for album_dict in response.get('albumList2', {}).get('album', []):
             if list_type != 'starred' or album_dict.get('starred'):
@@ -250,6 +250,50 @@ class Navidrome(Base):
     def getStarred(self, item_type:str) -> list:
         items = self.make_request('getStarred').get('starred', {}).get(item_type, [])
         return [item.get('id') for item in items]
+
+    def getGenres(self) -> list:
+         response = self.make_request('getGenres')
+         genre_ids = []
+         for genre_dict in response.get('genres', {}).get('genre', []):
+            if new_id := str(genre_dict.get('value', '')):
+                genre_dict['value'] = new_id
+                genre_ids.append(new_id)
+                if new_id in self.loaded_models:
+                    self.loaded_models.get(new_id).update_data(**genre_dict)
+                else:
+                    self.loaded_models[new_id] = models.Genre(**genre_dict)
+         return genre_ids
+
+    def getGenreArtists(self, genre_id: str, offset: int=0, size:int=10) -> list:
+        params = {
+        'type': 'byGenre',
+        'size': size,
+        'offset': offset,
+        'genre': genre_id,
+        'musicFolderId': self.library_ids
+        }
+        response = self.make_request('getAlbumList2', params)
+        artist_ids = set()
+        for album_dict in response.get('albumList2', {}).get('album', []):
+            if new_id := str(album_dict.get('artistId', '')):
+                artist_ids.add(new_id)
+        return artist_ids
+
+
+    def getGenreSongs(self, genre_id: str, offset: int=0, size:int=25) -> list:
+        params = {
+        'genre': genre_id,
+        'count': size,
+        'offset': offset,
+        'musicFolderId': self.library_ids
+        }
+        response = self.make_request('getSongsByGenre', params)
+        song_ids = set()
+        for album_dict in response.get('songsByGenre', {}).get('song', []):
+            if new_id := str(album_dict.get('id', '')):
+                song_ids.add(new_id)
+        return song_ids
+
 
     def verifyArtist(self, model_id:str, force_update:bool=False, use_threading:bool=True):
         def update():
@@ -338,6 +382,27 @@ class Navidrome(Base):
 
         if model_id not in self.loaded_models:
             self.loaded_models[model_id] = models.Song(id=model_id)
+            force_update = True
+
+        if force_update:
+            if use_threading:
+                self.threads.submit(update)
+            else:
+                update()
+
+        self.threads.submit(self.updateCoverArt, model_id)
+
+    def verifyGenre(self, model_id:str, force_update:bool=False, use_threading:bool=True):
+        def update():
+            response = self.make_request('getGenres')
+            genre_dict = response.get('genre', {})
+            if genre_dict.get('id'):
+                self.loaded_models.get(model_id).update_data(**genre_dict)
+            elif model_id in self.loaded_models:
+                del self.loaded_models[model_id]
+
+        if model_id not in self.loaded_models:
+            self.loaded_models[model_id] = models.Genre(id=model_id)
             force_update = True
 
         if force_update:

@@ -410,7 +410,7 @@ SIDEBAR_MENU = {
                 'title': _("Home"),
                 'icon-name': "user-home-symbolic",
                 'page-tag': 'home'
-            }
+            },
         }
     },
     'albums': { # Section
@@ -504,7 +504,16 @@ SIDEBAR_MENU = {
                 'icon-name': "playlist-symbolic"
             }
         }
-    }
+    },
+    'genres': { # Section (These are not grouped and can't be disabled)
+        'items': {
+            'genres': { # Item
+                'title': _("Genres"),
+                'icon-name': "genre-symbolic",
+                'page-tag': 'genres'
+            }
+        }
+    },
 }
 
 CONTEXT_ALBUM = {
@@ -699,5 +708,18 @@ CONTEXT_LYRICS = {
         "name": _("Remove Lyrics"),
         "css": ["error"],
         "icon-name": "user-trash-symbolic",
+    }
+}
+
+CONTEXT_GENRE = {
+    "play": {
+        "name": _("Play"),
+        "icon-name": "media-playback-start-symbolic",
+        "action-name": "app.play_genre"
+    },
+    "shuffle": {
+        "name": _("Shuffle"),
+        "icon-name": "media-playlist-shuffle-symbolic",
+        "action-name": "app.play_genre_shuffle"
     }
 }

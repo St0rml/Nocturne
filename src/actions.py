@@ -819,6 +819,12 @@ def play_radio_artist(window, model_id:str):
         )
         GLib.idle_add(window.toast_overlay.add_toast, toast)
 
+
+# -- GENRES --
+def show_genre(window, model_id:str):
+    __show_page(window, Widgets.GenrePage(model_id))
+
+
 # -- DOWNLOADS --
 
 def __request_song_download(model_id:str) -> bool:

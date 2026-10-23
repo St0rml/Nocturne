@@ -76,6 +76,8 @@
     <file alias="icons/scalable/status/jellyfin-symbolic.svg">icons/jellyfin-symbolic.svg</file>
     <file alias="icons/scalable/status/opensubsonic-symbolic.svg">icons/opensubsonic-symbolic.svg</file>
     <file alias="icons/scalable/status/playlist-infinite-symbolic.svg">icons/playlist-infinite-symbolic.svg</file>
+    <file alias="icons/scalable/status/genre-symbolic.svg">icons/genre-symbolic.svg</file>
+    <file alias="icons/scalable/status/tag-symbolic.svg">icons/tag-symbolic.svg</file>
 
     <file alias="window.ui">ui/window.ui</file>
     <file alias="shortcuts-dialog.ui">ui/shortcuts-dialog.ui</file>
@@ -103,6 +105,7 @@
     <file alias="pages/welcome.ui">ui/pages/welcome.ui</file>
     <file alias="pages/setup.ui">ui/pages/setup.ui</file>
     <file alias="pages/playback.ui">ui/pages/playback.ui</file>
+    <file alias="pages/genres.ui">ui/pages/genres.ui</file>
 
     <file alias="album/button.ui">ui/album/button.ui</file>
     <file alias="album/page.ui">ui/album/page.ui</file>
@@ -132,6 +135,10 @@
 
     <file alias="lyrics/dialog.ui">ui/lyrics/dialog.ui</file>
     <file alias="lyrics/edit_row.ui">ui/lyrics/edit_row.ui</file>
+
+    <file alias="genre/button.ui">ui/genre/button.ui</file>
+    <file alias="genre/page.ui">ui/genre/page.ui</file>
+    <file alias="genre/row.ui">ui/genre/row.ui</file>
   </gresource>
 </gresources>
 

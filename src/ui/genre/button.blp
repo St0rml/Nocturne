@@ -1,0 +1,57 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $NocturneGenreButton: Gtk.Button {
+  Gtk.GestureClick {
+    button: 3;
+    released => $show_popover();
+  }
+  Gtk.GestureLongPress {
+    pressed => $show_popover();
+  }
+  styles [
+    "flat"
+  ]
+  action-name: "app.show_genre";
+  action-target: bind $format_action_target(template.model as <$NocturneModelGenre> .id, 's');
+  tooltip-text: bind template.model as <$NocturneModelGenre> .value;
+  name: bind template.model as <$NocturneModelGenre> .value;
+
+  child: Gtk.Box {
+    orientation: vertical;
+    spacing: 5;
+
+    Adw.Avatar avatar_el {
+      custom-image: bind $format_gdkPaintable(template.model as <$NocturneModelGenre> .gdkPaintable);
+      icon-name: "tag-symbolic";
+    }
+
+    Gtk.Label name_el {
+      styles [
+        "title-3"
+      ]
+      ellipsize: end;
+      max-width-chars: 1;
+      label: bind template.model as <$NocturneModelGenre> .value;
+    }
+
+    Gtk.Label album_count_el {
+      styles [
+        "dimmed"
+      ]
+      ellipsize: end;
+      max-width-chars: 1;
+      visible: bind $format_negative_bool(template.model as <$NocturneModelGenre> .albumCount);
+      label: bind $format_album_count_label(template.model as <$NocturneModelGenre> .albumCount);
+    }
+    Gtk.Label song_count_el {
+      styles [
+        "dimmed"
+      ]
+      ellipsize: end;
+      max-width-chars: 1;
+      visible: bind $format_negative_bool(template.model as <$NocturneModelGenre> .songCount);
+      label: bind $format_song_count_label(template.model as <$NocturneModelGenre> .songCount);
+    }
+  };
+}
