@@ -55,13 +55,13 @@ template $NocturneGenrePage: Adw.NavigationPage {
             }
           }
 
-          $NocturneWrapbox artists_wrapbox {
+          $NocturneCarousel artists_carousel {
             visible: bind $format_to_bool(template.model as <$NocturneModelGenre> .albumCount) as <bool>;
             header-label: _("Artists");
             header-icon-name: "music-artist-symbolic";
           }
 
-          $NocturneWrapbox album_wrapbox {
+          $NocturneCarousel album_carousel {
             visible: bind $format_to_bool(template.model as <$NocturneModelGenre> .albumCount) as <bool>;
             header-label: _("Albums");
             header-icon-name: "music-queue-symbolic";
@@ -70,10 +70,8 @@ template $NocturneGenrePage: Adw.NavigationPage {
           $NocturneWrapbox song_list_el {
             visible: bind $format_to_bool(template.model as <$NocturneModelGenre> .albumCount) as <bool>;
             header-label: _("Songs");
-            header-icon-name: "music-artist-symbolic";
+            header-icon-name: "music-note-symbolic";
           }
-
-
         };
       };
     };
