@@ -2,7 +2,7 @@
 
 from gi.repository import GLib, GObject, Gdk, Gio
 from . import secret, models, local, sql_instance
-from ..constants import get_navidrome_path, get_navidrome_env, CONTEXT_MANAGED_NAVIDROME_SERVER, DOWNLOAD_QUEUE_DIR, DOWNLOADS_DIR, DOWNLOAD_MIME_MAP
+from ..constants import get_navidrome_path, get_navidrome_env, extract_genres_from_album_children, CONTEXT_MANAGED_NAVIDROME_SERVER, DOWNLOAD_QUEUE_DIR, DOWNLOADS_DIR, DOWNLOAD_MIME_MAP
 from .base import Base
 import random, threading, subprocess, os, re, logging, time, uuid
 from urllib.parse import urlencode, urlparse
@@ -277,6 +277,16 @@ class Navidrome(Base):
         for album_dict in response.get('albumList2', {}).get('album', []):
             if new_id := str(album_dict.get('artistId', '')):
                 artist_ids.add(new_id)
+                if artist_model := self.loaded_models.get(new_id):
+                    if artist_model.genres:
+                        artist_genres = set(artist_model.genres).add(genre_id)
+                    else:
+                        artist_genres = [genre_id]
+                    artist_model.update_data(genres=artist_genres)
+                else:
+                    self.verifyArtist(new_id)
+                    if artist_model := self.loaded_models.get(new_id):
+                        artist_model.update_data(genres=[genre_id])
         return artist_ids
 
 
@@ -299,13 +309,16 @@ class Navidrome(Base):
         def update():
             base_response = self.make_request('getArtist', {'id': model_id})
             base_artist = base_response.get('artist', {})
+            album_children = base_artist.get('album', [])
+            genres = extract_genres_from_album_children(album_children, model_id)
+
             detail_response = self.make_request('getArtistInfo2', {'id': model_id})
             detail_artist = detail_response.get('artistInfo2', {})
             if not isinstance(detail_artist, dict):
                 detail_artist = {}
             artist_dict = {**base_artist, **detail_artist}
             if artist_dict.get('id'):
-                self.loaded_models.get(model_id).update_data(**artist_dict)
+                self.loaded_models.get(model_id).update_data(**artist_dict, genres=genres)
             elif model_id in self.loaded_models:
                 del self.loaded_models[model_id]
 
@@ -410,8 +423,6 @@ class Navidrome(Base):
                 self.threads.submit(update)
             else:
                 update()
-
-        self.threads.submit(self.updateCoverArt, model_id)
 
     def star(self, model_id:str) -> bool:
         response = None

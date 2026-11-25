@@ -458,6 +458,27 @@ def build_genres_from_models(albums, artists, loaded_models, case_insensitive=Tr
 
     return genre_ids
 
+
+def extract_genres_from_album_children(album_children: str, artist_id: str):
+    for album in album_children:
+        if album.get('artistId') != artist_id:
+            continue
+        candidates = []
+        # Baisc Subsonic: 'genre' is single string
+        genres = album.get('genre')
+        if isinstance(genres, str):
+            candidates = iter_genre_names(genres)
+        else:
+            # OpenSubsonic (Navidrome 0.52+): 'genres' list of dicts or strings
+            for g in (album.get('genres') or []):
+                if isinstance(g, dict):
+                    candidates.append(normalize_genre_name(g.get('name', '')))
+                elif isinstance(g, str):
+                    candidates.append(normalize_genre_name(g))
+                
+    return list(set(candidates))
+
+
 TRANSLATORS = [
     "Jeffry Samuel (Spanish) https://jeffser.com",
     "Jordi Bultó (Catalan) https://github.com/formajestically",

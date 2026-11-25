@@ -2,13 +2,14 @@
 
 from gi.repository import GObject, Gtk, Gdk, Adw, GLib, Pango
 from ...integrations import get_current_integration, models
-from ...constants import CONTEXT_ARTIST
+from ...constants import CONTEXT_ARTIST, iter_genre_names
 from ..containers import get_context_buttons_list
 from ..song import SongSmallRow
 from ..album import AlbumButton
 from .button import ArtistButton
-import threading, io
+import threading, io, logging
 from colorthief import ColorThief
+logger = logging.getLogger(__name__)
 
 @Gtk.Template(resource_path='/com/jeffser/Nocturne/artist/page.ui')
 class ArtistPage(Adw.NavigationPage):
@@ -27,6 +28,7 @@ class ArtistPage(Adw.NavigationPage):
     artist_carousel = Gtk.Template.Child()
     rating_container = Gtk.Template.Child()
     context_wrap_el = Gtk.Template.Child()
+    genres_list_el = Gtk.Template.Child()
 
     def __init__(self, id:str):
         self.id = id
@@ -35,6 +37,9 @@ class ArtistPage(Adw.NavigationPage):
         super().__init__(
             model=integration.loaded_models.get(self.id)
         )
+        if self.model:
+            self.model.connect('notify::genres', self._on_genres_changed)
+        self._refresh_genres()
         context_buttons = get_context_buttons_list(CONTEXT_ARTIST, self.id)
         for btn in context_buttons:
             self.context_wrap_el.append(btn)
@@ -49,6 +54,7 @@ class ArtistPage(Adw.NavigationPage):
         self.top_songs_wrapbox.list_el.set_line_spacing(5)
 
     def do_showing(self):
+        self._refresh_genres()
         threading.Thread(target=self.update_top_songs, daemon=True).start()
         Adw.NavigationPage.do_showing(self)
 
@@ -162,6 +168,36 @@ class ArtistPage(Adw.NavigationPage):
     def update_artist_list(self, artist_list:list):
         artists = [a.get('id') for a in artist_list]
         self.artist_carousel.set_widgets([ArtistButton(id) for id in artists])
+
+    def _on_genres_changed(self, *args):
+        self._refresh_genres()
+
+    def _refresh_genres(self):
+        wrapbox = self.genres_list_el
+        wrapbox.remove_all()
+
+        if not self.model:
+            return
+
+        raw = self.model.get_property('genres')
+        seen = set()
+        for name in iter_genre_names(raw):
+            key = name.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+
+            button = Gtk.Button(label=name)
+            # exakt wie artist_el:
+            button.add_css_class('flat')
+            button.add_css_class('dimmed')
+            button.add_css_class('p0')
+            button.set_halign(Gtk.Align.START)
+            button.set_valign(Gtk.Align.CENTER)
+            button.set_action_name('app.show_genre')
+            button.set_action_target_value(GLib.Variant('s', name))
+            button.set_tooltip_text(name)
+            wrapbox.append(button)
 
     # -- Callbacks --
 
