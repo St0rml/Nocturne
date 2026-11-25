@@ -55,7 +55,7 @@ class GenrePage(Adw.NavigationPage):
             if model_id in self._integration.loaded_models:
                 continue
             try:
-                verify_fn(model_id, use_threading=False)
+                verify_fn(model_id, use_threading=False, minimal=True)
             except Exception:
                 logger.exception("verify failed for %s", model_id)
         return True
