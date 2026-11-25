@@ -3,7 +3,7 @@
 from gi.repository import GObject, Gtk, Gdk, Adw, GLib
 from ..song import SongRow
 from ...integrations import get_current_integration, models
-from ...constants import CONTEXT_ALBUM
+from ...constants import CONTEXT_ALBUM, iter_genre_names
 from ..containers import get_context_buttons_list
 import threading, io
 from colorthief import ColorThief
@@ -34,6 +34,7 @@ class AlbumPage(Adw.NavigationPage):
     star_el = Gtk.Template.Child()
     song_list_el = Gtk.Template.Child()
     context_wrap_el = Gtk.Template.Child()
+    genres_list_el = Gtk.Template.Child()
 
     def __init__(self, id:str):
         self.id = id
@@ -42,6 +43,9 @@ class AlbumPage(Adw.NavigationPage):
         super().__init__(
             model=integration.loaded_models.get(self.id)
         )
+        if self.model:
+            self.model.connect('notify::genres', self._on_genres_changed)
+        self._refresh_genres()
         context = CONTEXT_ALBUM.copy()
         del context['show-artist']
         if 'no-downloads' in integration.limitations:
@@ -52,6 +56,7 @@ class AlbumPage(Adw.NavigationPage):
                 self.context_wrap_el.append(btn)
 
     def do_showing(self):
+        self._refresh_genres()
         if root := self.get_root():
             if app := root.get_application():
                 if integration := app.get_property('integration'):
@@ -160,6 +165,37 @@ class AlbumPage(Adw.NavigationPage):
         for row in list(self.song_list_el.list_el):
             if isinstance(row, SongRow):
                 GLib.idle_add(set_action, row)
+
+    def _on_genres_changed(self, *args):
+        self._refresh_genres()
+
+    def _refresh_genres(self):
+        wrapbox = self.genres_list_el
+        wrapbox.remove_all()
+
+        if not self.model:
+            return
+
+        raw = self.model.get_property('genres')
+        seen = set()
+        for name in iter_genre_names(raw):
+            key = name.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+
+            button = Gtk.Button(label=name)
+            # exakt wie artist_el:
+            button.add_css_class('flat')
+            button.add_css_class('dimmed')
+            button.add_css_class('p0')
+            button.set_halign(Gtk.Align.START)
+            button.set_valign(Gtk.Align.CENTER)
+            button.set_action_name('app.show_genre')
+            button.set_action_target_value(GLib.Variant('s', name))
+            button.set_tooltip_text(name)
+            wrapbox.append(button)
+
 
     @Gtk.Template.Callback()
     def format_rating_icon_name(self, obj, rating:int, index):

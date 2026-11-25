@@ -367,13 +367,8 @@ def get_song_info_from_file(file_path:str, star_list:list=[], is_external_file:b
 
     return song
 
-def build_genres_from_models(albums, artists, loaded_models, case_insensitive=True):
-    """
-    Builds Genre-Models from existing album and artist models from a loaded_models dictionary.
-    This is primarily used in the local-integration.
-    """
 
-    def _normalize_genre_name(value):
+def normalize_genre_name(value):
         if isinstance(value, dict):
             value = value.get('name', '')
         if not isinstance(value, str):
@@ -382,31 +377,38 @@ def build_genres_from_models(albums, artists, loaded_models, case_insensitive=Tr
         return value or None
 
 
-    def _iter_genre_names(raw):
-        if not raw:
-            return
-        if isinstance(raw, str):
-            for part in raw.replace(';', ',').split(','):
-                name = _normalize_genre_name(part)
+def iter_genre_names(raw):
+    if not raw:
+        return
+    if isinstance(raw, str):
+        for part in raw.replace(';', ',').split(','):
+            name = normalize_genre_name(part)
+            if name:
+                yield name
+        return
+    for entry in raw:
+        if isinstance(entry, str):
+            for part in entry.replace(';', ',').split(','):
+                name = normalize_genre_name(part)
                 if name:
                     yield name
-            return
-        for entry in raw:
-            if isinstance(entry, str):
-                for part in entry.replace(';', ',').split(','):
-                    name = _normalize_genre_name(part)
-                    if name:
-                        yield name
-            else:
-                name = _normalize_genre_name(entry)
-                if name:
-                    yield name
+        else:
+            name = normalize_genre_name(entry)
+            if name:
+                yield name
+
+
+def build_genres_from_models(albums, artists, loaded_models, case_insensitive=True):
+    """
+    Builds Genre-Models from existing album and artist models from a loaded_models dictionary.
+    This is primarily used in the local-integration.
+    """
 
     def _iter_models(model_list:list) -> dict:
         genre_models  = defaultdict(set)   # key -> {album_id, ...}
         for model in model_list:
             model_id = model.get_property('id') or model.id
-            for genre in set(_iter_genre_names(model.get_property('genres'))):
+            for genre in set(iter_genre_names(model.get_property('genres'))):
                 genre_models[key(genre)].add(model_id)
         return genre_models
 
