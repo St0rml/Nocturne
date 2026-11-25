@@ -1,7 +1,10 @@
 # constants.py
 
+from requests.hooks import default_hooks
 import os, subprocess, json, shutil, uuid, re
 from tinytag import TinyTag
+from collections import defaultdict
+from .integrations.models import Genre
 
 CLI_ARGUMENTS = {
     "Play Control": {
@@ -334,6 +337,8 @@ def get_song_info_from_file(file_path:str, star_list:list=[], is_external_file:b
     album_artists = _normalize_artists([tag.albumartist or ""])
     album_artist = album_artists[0] if album_artists else (artists[0] if artists else "")
     year = parse_year_tag(tag.year)
+    genre_raw = tag.genre or ''
+    genre_entries = [{'name': g.strip()} for g in genre_raw.replace(';', ',').split(',') if g.strip()]
 
     song = {
         'path': file_path,
@@ -352,7 +357,8 @@ def get_song_info_from_file(file_path:str, star_list:list=[], is_external_file:b
         'discNumber': tag.disc or 0,
         'year':year,
         'albumGain': tag.extra.get('replaygain_album_gain') or tag.extra.get('REPLAYGAIN_ALBUM_GAIN') or 1,
-        'trackGain': tag.extra.get('replaygain_track_gain') or tag.extra.get('REPLAYGAIN_TRACK_GAIN') or 1
+        'trackGain': tag.extra.get('replaygain_track_gain') or tag.extra.get('REPLAYGAIN_TRACK_GAIN') or 1,
+        'genres': genre_entries or []
     }
 
     if not is_external_file:
@@ -360,6 +366,95 @@ def get_song_info_from_file(file_path:str, star_list:list=[], is_external_file:b
         song["albumId"] = "ALBUM:{}".format(song.get("album")) if song.get('album') else ""
 
     return song
+
+def build_genres_from_models(albums, artists, loaded_models, case_insensitive=True):
+    """
+    Builds Genre-Models from existing album and artist models from a loaded_models dictionary.
+    This is primarily used in the local-integration.
+    """
+
+    def _normalize_genre_name(value):
+        if isinstance(value, dict):
+            value = value.get('name', '')
+        if not isinstance(value, str):
+            return None
+        value = value.strip()
+        return value or None
+
+
+    def _iter_genre_names(raw):
+        if not raw:
+            return
+        if isinstance(raw, str):
+            for part in raw.replace(';', ',').split(','):
+                name = _normalize_genre_name(part)
+                if name:
+                    yield name
+            return
+        for entry in raw:
+            if isinstance(entry, str):
+                for part in entry.replace(';', ',').split(','):
+                    name = _normalize_genre_name(part)
+                    if name:
+                        yield name
+            else:
+                name = _normalize_genre_name(entry)
+                if name:
+                    yield name
+
+    def _iter_models(model_list:list) -> dict:
+        genre_models  = defaultdict(set)   # key -> {album_id, ...}
+        for model in model_list:
+            model_id = model.get_property('id') or model.id
+            for genre in set(_iter_genre_names(model.get_property('genres'))):
+                genre_models[key(genre)].add(model_id)
+        return genre_models
+
+    if case_insensitive:
+        canon = {}
+        def key(name):
+            k = name.casefold()
+            if k not in canon:
+                canon[k] = name
+            return k
+    else:
+        def key(name):
+            return name
+
+    genre_albums  = _iter_models(albums)
+    genre_artists = _iter_models(artists)
+
+    genre_ids = []
+    all_keys = sorted(set(genre_albums) | set(genre_artists), key=str.casefold)
+
+    for genre_key in all_keys:
+        display_name = canon[genre_key] if case_insensitive else genre_key
+
+        album_ids  = sorted(genre_albums.get(genre_key, ()))
+        artist_ids = sorted(genre_artists.get(genre_key, ()))
+
+        song_count = 0
+        for album_id in album_ids:
+            if am := loaded_models.get(album_id):
+                song_count += am.get_property('songCount') or len(am.get_property('song')) or 0
+
+        data = {
+            'id':         display_name,   # Name ist per Modell-Definition unique
+            'value':      display_name,
+            'albumCount': len(album_ids),
+            'songCount':  song_count,
+            'albums':     album_ids,
+            'artists':    artist_ids,
+        }
+
+        if display_name in loaded_models:
+            loaded_models[display_name].update_data(**data)
+        else:
+            loaded_models[display_name] = Genre(**data)
+
+        genre_ids.append(display_name)
+
+    return genre_ids
 
 TRANSLATORS = [
     "Jeffry Samuel (Spanish) https://jeffser.com",

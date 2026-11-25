@@ -19,6 +19,7 @@ class Album(GObject.Object):
     starred = GObject.Property(type=bool, default=False)
     userRating = GObject.Property(type=int)
     year = GObject.Property(type=int)
+    genres = GObject.Property(type=GObject.TYPE_PYOBJECT) #list
 
     verified = GObject.Property(type=bool, default=False)
 
@@ -53,6 +54,7 @@ class Artist(GObject.Object):
     biography = GObject.Property(type=str)
     similarArtist = GObject.Property(type=GObject.TYPE_PYOBJECT) #list
     userRating = GObject.Property(type=int)
+    genres = GObject.Property(type=GObject.TYPE_PYOBJECT) #list
 
     verified = GObject.Property(type=bool, default=False)
 
@@ -127,6 +129,7 @@ class Song(GObject.Object):
     radioStreamUrl = GObject.Property(type=str)
     container = GObject.Property(type=str)
     codec = GObject.Property(type=str)
+    genres = GObject.Property(type=GObject.TYPE_PYOBJECT, nick=_("Genres")) # list
 
     verified = GObject.Property(type=bool, default=False)
 

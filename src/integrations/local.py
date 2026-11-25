@@ -6,7 +6,7 @@ from .base import Base
 import random, threading, io, pathlib, re, os, time, uuid, pwd, getpass, shutil, logging
 from PIL import Image
 from tinytag import TinyTag
-from ..constants import DOWNLOADS_DIR, COMPATIBLE_EXTENSIONS, get_song_info_from_file, parse_year_tag
+from ..constants import DOWNLOADS_DIR, COMPATIBLE_EXTENSIONS, get_song_info_from_file, parse_year_tag, build_genres_from_models
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
@@ -225,7 +225,7 @@ class Local(Base):
                 pass
         return ""
 
-    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0) -> list:
+    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0, genre_id:str="") -> list:
         album_list = []
         if list_type == "random":
             album_list = [model_id for model_id in list(self.loaded_models) if model_id.startswith('ALBUM:')]
@@ -259,6 +259,11 @@ class Local(Base):
                 album_list = sorted(album_views, key=lambda x: album_views.get(x).get('last_play'), reverse=True)
         elif list_type == "starred":
             album_list = [model_id for model_id, model in self.loaded_models.items() if model_id.startswith('ALBUM:') and model.starred]
+        elif list_type == "byGenre":
+            if genre := self.loaded_models.get(genre_id):
+                album_list = genre.albums
+            else: 
+                return []
         else:
             album_list = [model_id for model_id in list(self.loaded_models) if model_id.startswith('ALBUM:')]
         return [model_id for model_id in album_list if model_id in self.loaded_models][offset:size+offset]
@@ -277,6 +282,29 @@ class Local(Base):
         conn.close()
         query = f"{item_type.upper()}:"
         return [item_id for item_id in star_list if item_id.startswith(query) and item_id in self.loaded_models]
+
+    def getGenres(self):
+        artists = [model for model_id, model in self.loaded_models.items() if model_id in self.album_artist_ids]
+        albums = [model for model_id, model in self.loaded_models.items() if model_id.startswith("ALBUM:")]
+        genre_ids = build_genres_from_models(albums, artists, self.loaded_models)
+        return genre_ids
+
+    def getGenreArtists(self, genre_id: str, offset: int = 0, size: int = 10) -> list:
+        if genre := self.loaded_models.get(genre_id):
+            ids = [a for a in (genre.get_property('artists') or [])]
+            return ids[offset : offset + size if size != -1 else None]
+        return []
+
+    def getGenreSongs(self, genre_id: str, offset: int = 0, size: int = 25) -> list:
+        if genre := self.loaded_models.get(genre_id):
+            song_ids = []
+            for alb in (genre.get_property('albums') or []):
+                if album_model := self.loaded_models.get(alb):
+                    for s in (album_model.get_property('song') or []):
+                        if sid := s.get('id'):
+                            song_ids.append(sid)
+            return song_ids[offset : offset + size if size != -1 else None]
+        return []
 
     def verifyArtist(self, model_id:str, force_update:bool=False, use_threading:bool=True, minimal:bool=False):
         threading.Thread(target=self.updateCoverArt, args=(model_id,), daemon=True).start()
@@ -321,7 +349,8 @@ class Local(Base):
                         'song': [{'id': model_id}],
                         'year':int(song.get('year') or "0"),
                         'starred': album_id in star_list,
-                        'userRating': self.get_rating(album_id)
+                        'userRating': self.get_rating(album_id),
+                        'genres': song.get('genres')
                     }
                     self.loaded_models[album.get('id')] = models.Album(**album)
 
@@ -335,7 +364,8 @@ class Local(Base):
                         album=[],
                         albumCount=0,
                         starred=artist_id in star_list,
-                        userRating=self.get_rating(artist_id)
+                        userRating=self.get_rating(artist_id),
+                        genres=song.get('genres')
                     )
 
                 album_list = self.loaded_models.get(artist_id).album
