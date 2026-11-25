@@ -387,9 +387,9 @@ class Base(GObject.Object):
                 'message': _('Could not generate SQL database')
             }
 
-    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0) -> list:
+    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0, genre:str="") -> list:
         # add non existing elements to self.loaded_models, returns lists of IDs, nothing more
-        # list_type = random, newest, frequent, recent, starred
+        # list_type = random, newest, frequent, recent, starred, byGenre
         logger.warning('method not implemented')
         return []
 
@@ -409,7 +409,14 @@ class Base(GObject.Object):
         return []
 
     def getGenres(self, size:int=10) -> list:
-        # add non existing elements to self.loaded_models, returns lists of IDs, nothing more
+        logger.warning('method not implemented')
+        return []
+
+    def getGenreArtists(self, genre_id: str, offset: int = 0, size: int = 10) -> list:
+        logger.warning('method not implemented')
+        return []
+
+    def getGenreSongs(self, genre_id: str, offset: int = 0, size: int = 25) -> list:
         logger.warning('method not implemented')
         return []
 
