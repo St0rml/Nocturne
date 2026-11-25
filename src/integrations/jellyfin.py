@@ -145,6 +145,7 @@ class MediaType(StrEnum):
     ARTIST = "MusicArtist"
     SONG = "Audio"
     PLAYLIST = "Playlist"
+    GENRE = "MusicGenre"
 
 class Jellyfin(Base):
     __gtype_name__ = 'NocturneIntegrationJellyfin'
@@ -491,7 +492,7 @@ class Jellyfin(Base):
             'message': _('Could not log in')
         }
 
-    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0) -> list:
+    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0, genre:str="") -> list:
         params = {
             "IncludeItemTypes": MediaType.ALBUM,
             "Recursive": "true",
@@ -513,6 +514,8 @@ class Jellyfin(Base):
             params["SortOrder"] = "Descending"
         elif list_type == "starred":
             params["Filters"] = "IsFavorite"
+        elif list_type == "byGenre" and genre:
+            params["GenreIds"] = genre
 
         albums = self.make_request(
             action='Users/{userId}/Items',
@@ -592,6 +595,61 @@ class Jellyfin(Base):
         self.__bulk_compile(check[item_type], items)
         return [item.get("Id") for item in items]
 
+    def getGenres(self) -> list:
+        genres = self.make_request(
+            action='Genres',
+            mode='GET',
+            params={
+                # "IncludeItemTypes": f"{MediaType.GENRE},Genre",
+                "userId": self.get_property("userId"),
+                "parentId": self.libraryId,
+                "Recursive": "true",
+            }
+        ).get('Items', [])
+        for genre in genres:
+            logger.info(genre)
+        self.__bulk_compile(MediaType.GENRE, genres)
+        return [genre.get("Id") for genre in genres]
+
+    def getGenreArtists(self, genre_id: str, offset: int = 0, size: int = 10) -> list:
+        params = {
+            "IncludeItemTypes": MediaType.ARTIST,
+            "Recursive": "true",
+            "GenreIds": genre_id,
+            "StartIndex": offset,
+            "Fields": "Overview",
+            "ParentId": self.libraryId
+        }
+        if size != -1:
+            params["Limit"] = size
+
+        artists = self.make_request(
+            action='Users/{userId}/Items',
+            mode='GET',
+            params=params
+        ).get('Items', [])
+        self.__bulk_compile(MediaType.ARTIST, artists)
+        return [artist.get("Id") for artist in artists]
+
+    def getGenreSongs(self, genre_id: str, offset: int = 0, size: int = 25) -> list:
+        params = {
+            "IncludeItemTypes": MediaType.SONG,
+            "Recursive": "true",
+            "GenreIds": genre_id,
+            "StartIndex": offset,
+            "Fields": "RunTimeTicks,UserData,ArtistItems,MediaSources",
+            "ParentId": self.libraryId
+        }
+        if size != -1:
+            params["Limit"] = size
+
+        songs = self.make_request(
+            action='Users/{userId}/Items',
+            mode='GET',
+            params=params
+        ).get('Items', [])
+        self.__bulk_compile(MediaType.SONG, songs)
+        return [song.get("Id") for song in songs]
 
     def verifyArtist(self, model_id:str, force_update:bool=False, use_threading:bool=True, minimal:bool=False):
         def fetch_artist():
@@ -1172,6 +1230,8 @@ class Jellyfin(Base):
                         self.loaded_models[model_id] = models.Song(id=model_id)
                     elif item_type == MediaType.PLAYLIST:
                         self.loaded_models[model_id] = models.Playlist(id=model_id)
+                    elif item_type == MediaType.GENRE:
+                        self.loaded_models[model_id] = models.Genre(id=model_id)
                 self.loaded_models.get(model_id).update_data(**item)
             lock.set()
 
@@ -1259,6 +1319,13 @@ class Jellyfin(Base):
                 "userRating": self.get_rating(item.get("Id")),
                 "container": item.get("Container"),
                 "codec": codec
+            }
+        elif model_type == MediaType.GENRE:
+            return {
+                "id": item.get("Id"),
+                "value": item.get("Name"),
+                "albumCount": item.get("AlbumCount", 0),
+                "songCount": item.get("SongCount", 0),
             }
 
     def search(self, query:str, artistCount:int=0, artistOffset:int=0, albumCount:int=0, albumOffset:int=0, songCount:int=0, songOffset:int=0, playlistCount:int=0, playlistOffset:int=0) -> dict:
