@@ -70,7 +70,7 @@ class GenrePage(Adw.NavigationPage):
 
         try:
             genre_albums = self._integration.getAlbumList(
-                list_type="byGenre", genre=self.id, size=-1
+                list_type="byGenre", genre_id=self.id, size=-1
             )
         except Exception:
             logger.exception("getAlbumList failed for genre %s", self.id)

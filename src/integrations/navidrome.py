@@ -177,13 +177,13 @@ class Navidrome(Base):
                 'message': '{}\n"{}"'.format(_('Server returned an error'), response.get('error', {}).get('message', _('Unknown Error')))
             }
 
-    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0, genre:str="") -> list:
+    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0, genre_id:str="") -> list:
         # returns a list of IDs
         params = {
             'type': list_type,
             'size': size,
             'offset': offset,
-            'genre': genre,
+            'genre': genre_id,
             'musicFolderId': self.library_ids
         }
         response = self.make_request('getAlbumList2', params)
@@ -252,9 +252,9 @@ class Navidrome(Base):
         return [item.get('id') for item in items]
 
     def getGenres(self) -> list:
-         response = self.make_request('getGenres')
-         genre_ids = []
-         for genre_dict in response.get('genres', {}).get('genre', []):
+        response = self.make_request('getGenres')
+        genre_ids = []
+        for genre_dict in response.get('genres', {}).get('genre', []):
             if new_id := str(genre_dict.get('value', '')):
                 genre_dict['value'] = new_id
                 genre_ids.append(new_id)
@@ -262,7 +262,7 @@ class Navidrome(Base):
                     self.loaded_models.get(new_id).update_data(**genre_dict)
                 else:
                     self.loaded_models[new_id] = models.Genre(**genre_dict)
-         return genre_ids
+        return genre_ids
 
     def getGenreArtists(self, genre_id: str, offset: int=0, size:int=10) -> list:
         params = {

@@ -492,7 +492,7 @@ class Jellyfin(Base):
             'message': _('Could not log in')
         }
 
-    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0, genre:str="") -> list:
+    def getAlbumList(self, list_type:str="recent", size:int=10, offset:int=0, genre_id:str="") -> list:
         params = {
             "IncludeItemTypes": MediaType.ALBUM,
             "Recursive": "true",
@@ -514,8 +514,8 @@ class Jellyfin(Base):
             params["SortOrder"] = "Descending"
         elif list_type == "starred":
             params["Filters"] = "IsFavorite"
-        elif list_type == "byGenre" and genre:
-            params["GenreIds"] = genre
+        elif list_type == "byGenre" and genre_id:
+            params["GenreIds"] = genre_id
 
         albums = self.make_request(
             action='Users/{userId}/Items',
