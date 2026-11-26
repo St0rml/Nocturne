@@ -459,24 +459,42 @@ def build_genres_from_models(albums, artists, loaded_models, case_insensitive=Tr
     return genre_ids
 
 
-def extract_genres_from_album_children(album_children: str, artist_id: str):
+def extract_genres_from_album_children(album_children: list, artist_id: str) -> list:
+    
+    def _album_belongs_to_artist(album: dict, artist_id: str) -> bool:
+
+        if album.get('artistId') == artist_id:
+            return True
+        for key in ('ArtistItems', 'AlbumArtists'):
+            for item in (album.get(key) or []):
+                if isinstance(item, dict) and item.get('Id') == artist_id:
+                    return True
+        return False
+    
+    seen = set()
+    result = []
     for album in album_children:
-        if album.get('artistId') != artist_id:
+        # only use genres where artist is main artist, this exlcudes compilations to avoid 
+        # the artist getting wrong genres.
+        if not _album_belongs_to_artist(album, artist_id):
             continue
-        candidates = []
-        # Baisc Subsonic: 'genre' is single string
-        genres = album.get('genre')
-        if isinstance(genres, str):
-            candidates = iter_genre_names(genres)
-        else:
-            # OpenSubsonic (Navidrome 0.52+): 'genres' list of dicts or strings
-            for g in (album.get('genres') or []):
-                if isinstance(g, dict):
-                    candidates.append(normalize_genre_name(g.get('name', '')))
-                elif isinstance(g, str):
-                    candidates.append(normalize_genre_name(g))
-                
-    return list(set(candidates))
+
+        # Subsonic: 'genre' is string seperated by comma or semicolon
+        # OpenSubsonic/Navidrome: 'genres' is list of  dicts or strings
+        # Jellyfin: 'Genres' is list of strings joined by comma
+        for field in ('genre', 'genres', 'Genres'):
+            raw = album.get(field)
+            for name in iter_genre_names(raw):
+                name = normalize_genre_name(name)
+                if not name:
+                    continue
+                key = name.casefold()
+                if key in seen:
+                    continue
+                seen.add(key)
+                result.append(name)
+
+    return result
 
 
 TRANSLATORS = [

@@ -3,7 +3,7 @@
 from gi.repository import GLib, GObject, Gdk, Gio
 from . import secret, models, local, sql_instance
 from .base import Base, BaseReportManager
-from ..constants import DOWNLOAD_QUEUE_DIR, DOWNLOADS_DIR, DOWNLOAD_MIME_MAP, COVER_SIZE, get_nocturne_version, get_device_id
+from ..constants import DOWNLOAD_QUEUE_DIR, DOWNLOADS_DIR, DOWNLOAD_MIME_MAP, COVER_SIZE, get_nocturne_version, get_device_id, extract_genres_from_album_children
 import os, platform, logging, io, threading, time, uuid, requests
 from urllib.parse import urlencode
 from requests.adapters import HTTPAdapter, Retry
@@ -606,8 +606,6 @@ class Jellyfin(Base):
                 "Recursive": "true",
             }
         ).get('Items', [])
-        for genre in genres:
-            logger.info(genre)
         self.__bulk_compile(MediaType.GENRE, genres)
         return [genre.get("Id") for genre in genres]
 
@@ -672,7 +670,8 @@ class Jellyfin(Base):
                 "AlbumArtistIds": [model_id],
                 "IncludeItemTypes": MediaType.ALBUM,
                 "Recursive": "true",
-                "SortBy": "PremiereDate"
+                "SortBy": "PremiereDate",
+                "fields": "Genres"
             }
             if minimal:
                 params["Limit"]=0 #Prevents complex db query
@@ -689,9 +688,11 @@ class Jellyfin(Base):
             if albums_request:
                 albums = albums_request.get("Items", [])
                 albums_dict = [{"id": alb.get("Id"), "name": alb.get("Name")} for alb in albums]
+                genres = extract_genres_from_album_children(albums, model_id)
                 self.__write_to_model(model_id, {
                     "albumCount": albums_request.get("TotalRecordCount", 0),
-                    "album": albums_dict
+                    "album": albums_dict,
+                    "genres": genres
                 }, wait=not use_threading)
                 if not minimal:
                     self.__bulk_compile(MediaType.ALBUM, albums)
@@ -1265,7 +1266,8 @@ class Jellyfin(Base):
                 "coverArt": cover_art,
                 "starred": item.get("UserData", {}).get("IsFavorite", False),
                 "biography": item.get("Overview", ""),
-                "userRating": self.get_rating(item.get("Id"))
+                "userRating": self.get_rating(item.get("Id")),
+                "genres": item.get("genres") # use already parsed genres
             }
         elif model_type == MediaType.ALBUM:
             artists = item.get("AlbumArtists", [])
